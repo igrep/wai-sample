@@ -1,0 +1,56 @@
+cabal-version: 2.4
+name:           wai-sample
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/igrep/wai-sample#readme>
+homepage:       https://github.com/igrep/wai-sample#readme
+bug-reports:    https://github.com/igrep/wai-sample/issues
+author:         YAMAMOTO Yuji
+maintainer:     whosekiteneverfly@gmail.com
+copyright:      2020 YAMAMOTO Yuji
+license:        BSD-3-Clause
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+common common
+  build-depends:
+      base >=4.7 && <5
+  default-language: Haskell2010
+
+source-repository head
+  type: git
+  location: https://github.com/igrep/wai-sample
+
+library
+  import: common
+  exposed-modules:
+      WaiSample
+  hs-source-dirs:
+      src
+  build-depends:
+      wai
+    , http-types
+
+executable wai-sample-exe
+  import: common
+  main-is: Main.hs
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      wai-sample
+    , warp
+
+test-suite wai-sample-test
+  import: common
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_wai_sample
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      wai-sample
