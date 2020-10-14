@@ -7,7 +7,7 @@ bug-reports:    https://github.com/igrep/wai-sample/issues
 author:         YAMAMOTO Yuji
 maintainer:     whosekiteneverfly@gmail.com
 copyright:      2020 YAMAMOTO Yuji
-license:        BSD-3-Clause
+license:        Apache-2.0
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
