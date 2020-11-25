@@ -31,7 +31,8 @@ library
   hs-source-dirs:
       src
   build-depends:
-      wai
+      bytestring
+    , wai
     , http-types
 
 executable wai-sample-exe
