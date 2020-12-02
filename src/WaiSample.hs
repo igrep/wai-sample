@@ -5,6 +5,7 @@ module WaiSample
   ( app
   , anyPiece
   , path
+  , pathWithSlashes
   , piece
   , decimalPiece
   , Handler (..)
@@ -29,6 +30,8 @@ app = handles
   [ path "/" `then'` (\_ -> return $ responseLBS status200 [] "index")
   , path "/about/us" `then'` (\_ -> return $ responseLBS status200 [] "About IIJ")
   , path "/about/us/finance" `then'` (\_ -> return $ responseLBS status200 [] "Financial Report 2020")
+  , path "/about/finance" `then'` (\_ -> return $ responseLBS status200 [] "Financial Report 2020 /")
+  , path "/about//finance" `then'` (\_ -> fail "This should not be executed.")
   , (path "/customer/" *> decimalPiece) `then'`
       (\i -> return $ responseLBS status200 [] $ "Customer ID: " <> BL.pack (show i))
   ]
@@ -77,16 +80,24 @@ decimalPiece = PathParser $ \inp -> do
       Left _        -> Nothing
 
 
--- TODO: Handle PathInfo including empty path pieces correctly.
 path :: T.Text -> PathParser [T.Text]
 path pathWithSlash = traverse piece ps
+ where
+  ps =
+    filter (/= "")
+      . T.split (== '/')
+      $ T.dropAround (== '/') pathWithSlash
+
+
+pathWithSlashes :: T.Text -> PathParser [T.Text]
+pathWithSlashes pathWithSlash = traverse piece ps
  where
   ps = T.split (== '/') $ T.dropAround (== '/') pathWithSlash
 
 
 pathParserToHandler :: PathParser a -> Handler a
 pathParserToHandler p = Handler $ \req -> do
-  (x, left) <- runPathParser p $ pathInfo req
+  (x, left) <- runPathParser p . filter (/= "") $ pathInfo req
   guard $ left == []
   return x
 
