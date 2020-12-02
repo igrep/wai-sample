@@ -39,6 +39,25 @@ app = handles
 
 newtype PathParser a = PathParser { runPathParser :: [T.Text] -> Maybe (a, [T.Text]) }
 
+-- TODO: Use GADTs
+{-
+data PathParserD a =
+    SimplePathPiece a
+  | FmapPath (a -> b) (PathParserD a)
+  -- ^ <$>
+  | ApPath (PathParserD (a -> b)) (PathParserD a)
+  -- ^ <*>
+-}
+
+-- Defunctionalization
+--   [T.Text] -> Maybe (a, [T.Text])
+--     => Non function!
+--     => 関数は中身をたどれない
+--          ありとあらゆる入力を与えないと、どんなパスを想定しているのかわからない！
+--            servantのようにクライアントを自動生成したり、ルーティングテーブルを作ったりするのが難しい
+--          実行パスを全部探索できない
+--   考えられるPathParserの操作すべてを列挙する代数的データ型に変換する
+
 instance Functor PathParser where
   fmap f p = PathParser $ \inp ->
     first f <$> runPathParser p inp
