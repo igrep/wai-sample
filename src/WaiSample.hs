@@ -102,16 +102,13 @@ decimalPiece = PathParser $ \inp -> do
 path :: T.Text -> PathParser [T.Text]
 path pathWithSlash = traverse piece ps
  where
-  ps =
-    filter (/= "")
-      . T.split (== '/')
-      $ T.dropAround (== '/') pathWithSlash
+  ps = filter (/= "") $ T.split (== '/') pathWithSlash
 
 
 pathWithSlashes :: T.Text -> PathParser [T.Text]
 pathWithSlashes pathWithSlash = traverse piece ps
  where
-  ps = T.split (== '/') $ T.dropAround (== '/') pathWithSlash
+  ps = T.split (== '/') pathWithSlash
 
 
 pathParserToHandler :: PathParser a -> Handler a
