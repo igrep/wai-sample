@@ -28,6 +28,8 @@ library
   import: common
   exposed-modules:
       WaiSample
+  other-modules:
+      WaiSample.PathParser
   hs-source-dirs:
       src
   build-depends:

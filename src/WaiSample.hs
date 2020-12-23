@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE OverloadedStrings         #-}
 
 module WaiSample
@@ -9,7 +10,8 @@ module WaiSample
   , piece
   , decimalPiece
   , Handler (..)
-  , PathParser (..)
+  , showRoutes
+  , printRoutes
   ) where
 
 import           Control.Exception          (bracket_)
@@ -24,6 +26,8 @@ import           Network.HTTP.Types.Status  (status200, status404)
 import           Network.Wai                (Application, Request, Response,
                                              pathInfo, responseLBS)
 
+import qualified WaiSample.PathParser       as PathParser
+
 
 app :: Application
 app = handles
@@ -37,17 +41,32 @@ app = handles
   ]
 
 
-newtype PathParser a = PathParser { runPathParser :: [T.Text] -> Maybe (a, [T.Text]) }
+routes :: RoutingTable [T.Text]
+routes = foldr1 (<>)
+  [ path "/"
+  , path "/about/us"
+  , path "/about/us/finance"
+  , path "/about/finance"
+  , path "/about//finance"
+  , path "/customer/" *> decimalPiece *> pure []
+  ]
 
--- TODO: Use GADTs
-{-
-data PathParserD a =
-    SimplePathPiece a
-  | FmapPath (a -> b) (PathParserD a)
+
+printRoutes :: IO ()
+printRoutes = putStrLn $ showRoutes routes
+
+
+data RoutingTable a where
+  AnyPiece :: RoutingTable T.Text
+  Piece :: T.Text -> RoutingTable T.Text
+  FmapPath :: (a -> b) -> RoutingTable a -> RoutingTable b
   -- ^ <$>
-  | ApPath (PathParserD (a -> b)) (PathParserD a)
+  PurePath :: a -> RoutingTable a
+  ApPath :: RoutingTable (a -> b) -> (RoutingTable a) -> (RoutingTable b)
   -- ^ <*>
--}
+  AltPath :: RoutingTable a -> RoutingTable a -> RoutingTable a
+  -- ^ <>
+  ParsedPath :: (T.Text -> Either String (a, T.Text)) -> RoutingTable a
 
 -- Defunctionalization
 --   [T.Text] -> Maybe (a, [T.Text])
@@ -56,8 +75,98 @@ data PathParserD a =
 --          ありとあらゆる入力を与えないと、どんなパスを想定しているのかわからない！
 --            servantのようにクライアントを自動生成したり、ルーティングテーブルを作ったりするのが難しい
 --          実行パスを全部探索できない
---   考えられるPathParserの操作すべてを列挙する代数的データ型に変換する
+--   考えられるRoutingTableの操作すべてを列挙する代数的データ型に変換する
 
+instance Functor RoutingTable where
+  fmap = FmapPath
+
+instance Applicative RoutingTable where
+  pure = PurePath
+  (<*>) = ApPath
+
+instance Semigroup (RoutingTable a) where
+  (<>) = AltPath
+
+
+anyPiece :: RoutingTable T.Text
+anyPiece = AnyPiece
+
+
+piece :: T.Text -> RoutingTable T.Text
+piece = Piece
+
+
+-- piece "foo" *> piece "example" *> piece "users"
+-- path "foo/example/users" *> decimalPiece
+
+-- :id of /for/example/users/:id
+decimalPiece :: RoutingTable Int
+decimalPiece = ParsedPath TR.decimal
+
+
+path :: T.Text -> RoutingTable [T.Text]
+path pathWithSlash = traverse piece ps
+ where
+  ps = filter (/= "") $ T.split (== '/') pathWithSlash
+
+
+pathWithSlashes :: T.Text -> RoutingTable [T.Text]
+pathWithSlashes pathWithSlash = traverse piece ps
+ where
+  ps = T.split (== '/') pathWithSlash
+
+
+pathParserToHandler :: RoutingTable a -> Handler a
+pathParserToHandler p = Handler $ \req -> do
+  (x, left) <- parseByRoutingTable p . filter (/= "") $ pathInfo req
+  guard $ left == []
+  return x
+
+newtype Handler a = Handler { runHandler :: Request -> Maybe a }
+
+instance Semigroup (Handler a) where
+  (Handler a) <> (Handler b) = Handler $ \req -> getFirst $ First (a req) <> First (b req)
+
+-- Then' :: RoutingTable a -> (a -> IO Response) -> Handler (IO Response)
+then' :: RoutingTable a -> (a -> IO Response) -> Handler (IO Response)
+then' p act = Handler $ fmap act . runHandler (pathParserToHandler p)
+
+
+handles :: [Handler (IO Response)] -> Application
+handles handlers req respond' = bracket_ (putStrLn "Allocating") (putStrLn "Cleaning") $ do
+  let foundResponds = listToMaybe $ mapMaybe (\handler -> runHandler handler req) handlers
+  case foundResponds of
+      Just respond -> respond' =<< respond
+      Nothing      -> respond' handle404
+ where
+  handle404 = responseLBS status404 [] "404 Not found."
+
+
+parseByRoutingTable :: RoutingTable a -> [T.Text] -> Maybe (a, [T.Text])
+parseByRoutingTable AnyPiece     = PathParser.run PathParser.anyPiece
+parseByRoutingTable (Piece p) = PathParser.run $ PathParser.piece p
+parseByRoutingTable (FmapPath f tbl) = \inp -> first f <$> parseByRoutingTable tbl inp
+parseByRoutingTable (PurePath x) = \inp -> (Just (x, inp))
+parseByRoutingTable (ApPath tblF tblA) = \inp -> do
+  (f, out) <- parseByRoutingTable tblF inp
+  first f <$> parseByRoutingTable tblA out
+parseByRoutingTable (AltPath tblA tblB) = \inp ->
+  getFirst $ First (parseByRoutingTable tblA inp) <> First (parseByRoutingTable tblB inp)
+parseByRoutingTable (ParsedPath parser) = \inp ->
+  case inp of
+    p : ps ->
+      case parser p of
+          Right (x, "") -> Just (x, ps)
+          Right _       -> Nothing
+          Left _        -> Nothing
+    [] -> Nothing
+
+
+showRoutes :: RoutingTable [T.Text] -> String
+showRoutes = undefined
+
+
+{-
 instance Functor PathParser where
   fmap f p = PathParser $ \inp ->
     first f <$> runPathParser p inp
@@ -135,3 +244,4 @@ handles handlers req respond' = bracket_ (putStrLn "Allocating") (putStrLn "Clea
       Nothing      -> respond' handle404
  where
   handle404 = responseLBS status404 [] "404 Not found."
+-}
