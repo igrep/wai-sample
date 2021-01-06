@@ -21,6 +21,8 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Maybe                 (listToMaybe, mapMaybe)
 import           Data.Monoid                (First (First, getFirst))
 import qualified Data.Text                  as T
+import qualified Data.Text.Lazy.Builder     as TLB
+import qualified Data.Text.Lazy.IO          as TLIO
 import qualified Data.Text.Read             as TR
 import           Network.HTTP.Types.Status  (status200, status404)
 import           Network.Wai                (Application, Request, Response,
@@ -53,7 +55,7 @@ routes = foldr1 (<>)
 
 
 printRoutes :: IO ()
-printRoutes = putStrLn $ showRoutes routes
+printRoutes = TLIO.putStrLn . TLB.toLazyText $ showRoutes routes
 
 
 data RoutingTable a where
@@ -162,8 +164,18 @@ parseByRoutingTable (ParsedPath parser) = \inp ->
     [] -> Nothing
 
 
-showRoutes :: RoutingTable [T.Text] -> String
-showRoutes = undefined
+showRoutes :: RoutingTable a -> TLB.Builder
+showRoutes = ("/" <>) . showRoutes'
+
+
+showRoutes' :: RoutingTable a -> TLB.Builder
+showRoutes' AnyPiece             = "*"
+showRoutes' (Piece p)            = TLB.fromText p
+showRoutes' (FmapPath _f tbl)    = showRoutes' tbl
+showRoutes' (PurePath _x)        = ""
+showRoutes' (ApPath tblF tblA)   = showRoutes' tblF <> "/" <> showRoutes' tblA
+showRoutes' (AltPath tblA tblB)  = showRoutes' tblA <> "\n/" <> showRoutes' tblB
+showRoutes' (ParsedPath _parser) = ":param" -- TODO: Name the parameter
 
 
 {-
