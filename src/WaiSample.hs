@@ -18,6 +18,7 @@ import           Control.Exception          (bracket_)
 import           Control.Monad              (guard)
 import           Data.Bifunctor             (first)
 import qualified Data.ByteString.Lazy.Char8 as BL
+import           Data.Functor               (void)
 import           Data.Maybe                 (listToMaybe, mapMaybe)
 import           Data.Monoid                (First (First, getFirst))
 import qualified Data.Text                  as T
@@ -32,7 +33,11 @@ import qualified WaiSample.PathParser       as PathParser
 
 
 app :: Application
-app = handles
+app = handles routes
+
+
+routes :: [Handler (IO Response)]
+routes =
   [ path "/" `then'` (\_ -> return $ responseLBS status200 [] "index")
   , path "/about/us" `then'` (\_ -> return $ responseLBS status200 [] "About IIJ")
   , path "/about/us/finance" `then'` (\_ -> return $ responseLBS status200 [] "Financial Report 2020")
@@ -40,17 +45,6 @@ app = handles
   , path "/about//finance" `then'` (\_ -> fail "This should not be executed.")
   , (path "/customer/" *> decimalPiece) `then'`
       (\i -> return $ responseLBS status200 [] $ "Customer ID: " <> BL.pack (show i))
-  ]
-
-
-routes :: RoutingTable [T.Text]
-routes = foldr1 (<>)
-  [ path "/"
-  , path "/about/us"
-  , path "/about/us/finance"
-  , path "/about/finance"
-  , path "/about//finance"
-  , path "/customer/" *> decimalPiece *> pure []
   ]
 
 
@@ -118,30 +112,31 @@ pathWithSlashes pathWithSlash = traverse piece ps
   ps = T.split (== '/') pathWithSlash
 
 
-pathParserToHandler :: RoutingTable a -> Handler a
-pathParserToHandler p = Handler $ \req -> do
+runRoutingTable :: RoutingTable a -> Request -> Maybe a
+runRoutingTable p req = do
   (x, left) <- parseByRoutingTable p . filter (/= "") $ pathInfo req
   guard $ left == []
   return x
 
-newtype Handler a = Handler { runHandler :: Request -> Maybe a }
+data Handler a where
+  ThenHandler :: RoutingTable a -> (a -> IO Response) -> Handler (IO Response)
 
-instance Semigroup (Handler a) where
-  (Handler a) <> (Handler b) = Handler $ \req -> getFirst $ First (a req) <> First (b req)
-
--- Then' :: RoutingTable a -> (a -> IO Response) -> Handler (IO Response)
 then' :: RoutingTable a -> (a -> IO Response) -> Handler (IO Response)
-then' p act = Handler $ fmap act . runHandler (pathParserToHandler p)
+then' = ThenHandler
 
 
 handles :: [Handler (IO Response)] -> Application
-handles handlers req respond' = bracket_ (putStrLn "Allocating") (putStrLn "Cleaning") $ do
-  let foundResponds = listToMaybe $ mapMaybe (\handler -> runHandler handler req) handlers
+handles hdls req respond' = bracket_ (putStrLn "Allocating") (putStrLn "Cleaning") $ do
+  let foundResponds = listToMaybe $ mapMaybe (\hdl -> runHandler hdl req) hdls
   case foundResponds of
       Just respond -> respond' =<< respond
       Nothing      -> respond' handle404
  where
   handle404 = responseLBS status404 [] "404 Not found."
+
+
+runHandler :: Handler (IO Response) -> Request -> Maybe (IO Response)
+runHandler (ThenHandler tbl hdl) req = hdl <$> runRoutingTable tbl req
 
 
 parseByRoutingTable :: RoutingTable a -> [T.Text] -> Maybe (a, [T.Text])
@@ -164,9 +159,9 @@ parseByRoutingTable (ParsedPath parser) = \inp ->
     [] -> Nothing
 
 
-showRoutes :: RoutingTable a -> TLB.Builder
-showRoutes = ("/" <>) . showRoutes'
-
+-- TODO: Delete extra slashes and newlines
+showRoutes :: [Handler a] -> TLB.Builder
+showRoutes = ("/" <>) . foldMap ((<> "\n/") . showRoutes' . extractRoutingTable)
 
 showRoutes' :: RoutingTable a -> TLB.Builder
 showRoutes' AnyPiece             = "*"
@@ -176,6 +171,9 @@ showRoutes' (PurePath _x)        = ""
 showRoutes' (ApPath tblF tblA)   = showRoutes' tblF <> "/" <> showRoutes' tblA
 showRoutes' (AltPath tblA tblB)  = showRoutes' tblA <> "\n/" <> showRoutes' tblB
 showRoutes' (ParsedPath _parser) = ":param" -- TODO: Name the parameter
+
+extractRoutingTable :: Handler a -> RoutingTable ()
+extractRoutingTable (ThenHandler tbl _) = void tbl
 
 
 {-
