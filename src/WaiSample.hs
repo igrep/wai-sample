@@ -87,7 +87,7 @@ piece = Piece
 -- path "foo/example/users" *> decimalPiece
 
 -- :id of /for/example/users/:id
-decimalPiece :: RoutingTable Int
+decimalPiece :: RoutingTable Integer
 decimalPiece = ParsedPath TR.decimal
 
 
