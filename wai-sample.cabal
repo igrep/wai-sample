@@ -33,7 +33,8 @@ library
   hs-source-dirs:
       src
   build-depends:
-      bytestring
+      aeson
+    , bytestring
     , wai
     , http-types
 
