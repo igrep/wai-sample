@@ -6,6 +6,7 @@
 module WaiSample
   ( app
   , anyPiece
+  , routes
   , path
   , pathWithSlashes
   , piece
@@ -43,19 +44,35 @@ app = handles routes
 
 routes :: [Handler]
 routes =
-  [ (path "/" `then'` (\_ -> return "index")) text
-  , (path "/about/us" `then'` (\_ -> return "About IIJ")) text
-  , (path "/about/us/finance" `then'` (\_ -> return "Financial Report 2020")) text
-  , (path "/about/finance" `then'` (\_ -> return "Financial Report 2020 /")) text
-  , (path "/about//finance" `then'` (\_ -> fail "This should not be executed.")) text
-  , ((path "/customer/" *> decimalPiece) `then'`
-      (\i -> return $ "Customer ID: " <> T.pack (show i))) text
-  , ((path "/customer/" *> decimalPiece <* Piece "json" ) `then'`
-      (\i -> return $ Customer
-        { customerName = "Mr. " <> T.pack (show i)
-        , customerId = i
-        })) json
+  [ handler "index" (path "/") (\_ -> return "index") text
+  , handler "aboutUs" (path "/about/us") (\_ -> return "About IIJ") text
+  , handler "aboutUsFinance" (path "/about/us/finance") (\_ -> return "Financial Report 2020") text
+  , handler "aboutFinance" (path "/about/finance") (\_ -> return "Financial Report 2020 /") text
+  , handler "aboutFinanceImpossilbe" (path "/about//finance") (\_ -> fail "This should not be executed.") text
+  , handler "customerId"
+      (path "/customer/" *> decimalPiece)
+      (\i -> return $ "Customer ID: " <> T.pack (show i))
+      text
+  , handler "customerIdJson"
+    (path "/customer/" *> decimalPiece <* Piece "json")
+    (\i -> return $ Customer
+      { customerName = "Mr. " <> T.pack (show i)
+      , customerId = i
+      })
+    json
   ]
+
+
+{- TODO Generate functions:
+
+prefixIndex :: Backend -> IO T.Text
+prefixAboutUs :: Backend -> IO T.Text
+prefixAboutUsFinance :: Backend -> IO T.Text
+prefixFinance :: Backend -> IO T.Text
+prefixFinanceImpossible :: Backend -> IO T.Text
+prefixCustomerId :: Backend -> Integer -> IO T.Text
+prefixCustomerIdJson :: Backend -> Integer -> IO Customer
+-}
 
 
 data Customer = Customer
@@ -134,7 +151,7 @@ runRoutingTable p req = do
   return x
 
 data Handler where
-  ThenHandler :: RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
+  Handler :: String -> RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
 
 data ToFromResponseBody resObj = ToFromResponseBody
   { toResponseBody   :: resObj -> IO BL.ByteString
@@ -156,8 +173,8 @@ text = ToFromResponseBody
   , fromResponseBody = return . TE.decodeUtf8 . BL.toStrict
   }
 
-then' :: RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
-then' = ThenHandler
+handler :: String -> RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
+handler = Handler
 
 
 handles :: [Handler] -> Application
@@ -171,7 +188,7 @@ handles hdls req respond' = bracket_ (putStrLn "Allocating") (putStrLn "Cleaning
 
 
 runHandler :: Handler -> Request -> Maybe (IO Response)
-runHandler (ThenHandler tbl hdl tfr) req =
+runHandler (Handler _name tbl hdl tfr) req =
   act <$> runRoutingTable tbl req
  where
   act x = do
@@ -213,4 +230,4 @@ showRoutes' (AltPath tblA tblB)  = showRoutes' tblA <> "\n/" <> showRoutes' tblB
 showRoutes' (ParsedPath _parser) = ":param" -- TODO: Name the parameter
 
 extractRoutingTable :: Handler -> RoutingTable ()
-extractRoutingTable (ThenHandler tbl _hdl _tfr) = void tbl
+extractRoutingTable (Handler _name tbl _hdl _tfr) = void tbl
