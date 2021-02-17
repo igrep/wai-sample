@@ -28,6 +28,7 @@ library
   import: common
   exposed-modules:
       WaiSample
+      WaiSample.Client
   other-modules:
       WaiSample.PathParser
   hs-source-dirs:
@@ -37,6 +38,8 @@ library
     , bytestring
     , wai
     , http-types
+    , http-conduit
+    , template-haskell
 
 executable wai-sample-exe
   import: common
