@@ -2,6 +2,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 
 module WaiSample
   ( app
@@ -25,11 +26,13 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Functor               (void)
 import           Data.Maybe                 (listToMaybe, mapMaybe)
 import           Data.Monoid                (First (First, getFirst))
+import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import qualified Data.Text.Encoding         as TE
 import qualified Data.Text.Lazy.Builder     as TLB
 import qualified Data.Text.Lazy.IO          as TLIO
 import qualified Data.Text.Read             as TR
+import           Data.Typeable              (TypeRep, Typeable, typeRep)
 import           GHC.Generics               (Generic)
 import           Network.HTTP.Types.Status  (status200, status404)
 import           Network.Wai                (Application, Request, Response,
@@ -151,29 +154,37 @@ runRoutingTable p req = do
   return x
 
 data Handler where
-  Handler :: String -> RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
+  Handler :: (Typeable a, Typeable resObj) => String -> RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
 
 data ToFromResponseBody resObj = ToFromResponseBody
-  { toResponseBody   :: resObj -> IO BL.ByteString
+  { resObjType       :: TypeRep
+  , toResponseBody   :: resObj -> IO BL.ByteString
   , fromResponseBody :: BL.ByteString -> IO resObj
   }
   -- TODO: Add mimetype
   -- TODO: Add Negotiation with Content-Type
   -- TODO: Add other header, status code etc.
 
-json :: (ToJSON resObj, FromJSON resObj) => ToFromResponseBody resObj
-json = ToFromResponseBody
-  { toResponseBody = return . Json.encode
-  , fromResponseBody = either fail return . Json.eitherDecode'
-  }
+
+-- TODO: Explain Proxy, ScopedTypeVariables
+toFromResponseBody
+  :: forall resObj. Typeable resObj
+  => (resObj -> IO BL.ByteString)
+  -> (BL.ByteString -> IO resObj)
+  -> ToFromResponseBody resObj
+toFromResponseBody = ToFromResponseBody (typeRep (Proxy :: Proxy resObj))
+
+json :: (Typeable resObj, ToJSON resObj, FromJSON resObj) => ToFromResponseBody resObj
+json = toFromResponseBody
+  (return . Json.encode)
+  (either fail return . Json.eitherDecode')
 
 text :: ToFromResponseBody T.Text
-text = ToFromResponseBody
-  { toResponseBody = return . BL.fromStrict . TE.encodeUtf8
-  , fromResponseBody = return . TE.decodeUtf8 . BL.toStrict
-  }
+text = toFromResponseBody
+  (return . BL.fromStrict . TE.encodeUtf8)
+  (return . TE.decodeUtf8 . BL.toStrict)
 
-handler :: String -> RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
+handler :: (Typeable a, Typeable resObj) => String -> RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
 handler = Handler
 
 
