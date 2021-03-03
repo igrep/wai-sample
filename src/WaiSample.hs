@@ -51,7 +51,7 @@ routes =
   , handler "aboutUs" (path "/about/us") (\_ -> return "About IIJ") text
   , handler "aboutUsFinance" (path "/about/us/finance") (\_ -> return "Financial Report 2020") text
   , handler "aboutFinance" (path "/about/finance") (\_ -> return "Financial Report 2020 /") text
-  , handler "aboutFinanceImpossilbe" (path "/about//finance") (\_ -> fail "This should not be executed.") text
+  , handler "aboutFinanceImpossible" (path "/about//finance") (\_ -> fail "This should not be executed.") text
   , handler "customerId"
       (path "/customer/" *> decimalPiece)
       (\i -> return $ "Customer ID: " <> T.pack (show i))
