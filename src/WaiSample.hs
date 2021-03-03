@@ -166,7 +166,6 @@ data ToFromResponseBody resObj = ToFromResponseBody
   -- TODO: Add other header, status code etc.
 
 
--- TODO: Explain Proxy, ScopedTypeVariables
 toFromResponseBody
   :: forall resObj. Typeable resObj
   => (resObj -> IO BL.ByteString)
