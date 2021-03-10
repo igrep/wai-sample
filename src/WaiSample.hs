@@ -25,6 +25,7 @@ import           Data.Aeson                 (FromJSON, ToJSON)
 import qualified Data.Aeson                 as Json
 import           Data.Bifunctor             (first)
 import qualified Data.ByteString.Lazy.Char8 as BL
+import           Data.Foldable              (traverse_)
 import           Data.Functor               (void)
 import           Data.Maybe                 (listToMaybe, mapMaybe)
 import           Data.Monoid                (First (First, getFirst))
@@ -142,14 +143,14 @@ decimalPiece :: RoutingTableCore Integer
 decimalPiece = ParsedPath TR.decimal
 
 
-path :: T.Text -> RoutingTableCore [T.Text]
-path pathWithSlash = traverse piece ps
+path :: T.Text -> RoutingTableCore ()
+path pathWithSlash = traverse_ piece ps
  where
   ps = filter (/= "") $ T.split (== '/') pathWithSlash
 
 
-pathWithSlashes :: T.Text -> RoutingTableCore [T.Text]
-pathWithSlashes pathWithSlash = traverse piece ps
+pathWithSlashes :: T.Text -> RoutingTableCore ()
+pathWithSlashes pathWithSlash = traverse_ piece ps
  where
   ps = T.split (== '/') pathWithSlash
 
