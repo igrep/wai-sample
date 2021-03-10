@@ -30,8 +30,8 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
   makeUpName :: String -> String
   makeUpName handlerName =
     if null prefix
-      then prefix ++ toUpperFirst handlerName
-      else handlerName
+      then handlerName
+      else prefix ++ toUpperFirst handlerName
 
   toUpperFirst :: String -> String
   toUpperFirst (first : left) = toUpper first : left
