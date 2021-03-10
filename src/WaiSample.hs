@@ -14,6 +14,7 @@ module WaiSample
   , decimalPiece
   , Handler (..)
   , RoutingTable (..)
+  , ToFromResponseBody (..)
   , getTypeRep
   , showRoutes
   , printRoutes
