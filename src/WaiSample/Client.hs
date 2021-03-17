@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs           #-}
 {-# LANGUAGE TemplateHaskell #-}
 module WaiSample.Client
   ( declareClient
@@ -11,7 +12,7 @@ import           Data.Typeable              (TypeRep, tyConModule, tyConName,
                                              tyConPackage, typeOf, typeRepTyCon)
 import           Language.Haskell.TH        (Dec, DecQ, DecsQ, TypeQ, appT,
                                              clause, conT, funD, mkName,
-                                             normalB, sigD, varP)
+                                             normalB, sigD, varE, varP)
 import           Language.Haskell.TH.Syntax (ModName (ModName), Name (Name),
                                              NameFlavour (NameG),
                                              NameSpace (TcClsName),
@@ -36,9 +37,16 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     sig <- sigD funName $  [t| (->) Backend |] `appT` typeQTail
 
     let bd = mkName "bd"
+        path = pathBuilderFromRoutingTable $ withoutTypeRep tbl
+        fromResBody = fromResponseBody toFromResponseBody
+        implE = [e|
+            do
+              resBody <- $(varE bd) path
+              return $ fromResBody resBody
+          |]
     def <- funD
       funName
-      [clause [varP bd] (normalB [e| return $ T.pack "" |]) []]
+      [clause [varP bd] (normalB implE) []]
     return [sig, def]
 
   makeUpName :: String -> String
@@ -50,6 +58,16 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
   toUpperFirst :: String -> String
   toUpperFirst (first : left) = toUpper first : left
   toUpperFirst _              = error "toUpperFirst: Empty handler name!"
+
+
+pathBuilderFromRoutingTable :: RoutingTable a -> String
+pathBuilderFromRoutingTable AnyPiece             = "*"
+pathBuilderFromRoutingTable (Piece p)            = T.unpack p
+pathBuilderFromRoutingTable (FmapPath _f tbl)    = pathBuilderFromRoutingTable tbl
+pathBuilderFromRoutingTable (PurePath _x)        = ""
+pathBuilderFromRoutingTable (ApPath tblF tblA)   = pathBuilderFromRoutingTable tblF <> "/" <> pathBuilderFromRoutingTable tblA
+pathBuilderFromRoutingTable (AltPath tblA tblB)  = undefined -- TODO
+pathBuilderFromRoutingTable (ParsedPath _parser) = undefined -- TODO
 
 
 -- TODO: Perhaps we should fix the case where the TypeRep object has arguments (e.g. Maybe Int).

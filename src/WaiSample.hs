@@ -14,8 +14,10 @@ module WaiSample
   , decimalPiece
   , Handler (..)
   , RoutingTable (..)
+  , RoutingTableWithType (..)
   , ToFromResponseBody (..)
   , getTypeRep
+  , withoutTypeRep
   , showRoutes
   , printRoutes
   ) where
@@ -98,41 +100,45 @@ printRoutes :: IO ()
 printRoutes = TLIO.putStrLn . TLB.toLazyText $ showRoutes routes
 
 
-data RoutingTable a = RoutingTable TypeRep (RoutingTableCore a)
+data RoutingTableWithType a = RoutingTableWithType TypeRep (RoutingTable a)
 
 
-getTypeRep :: RoutingTable a -> TypeRep
-getTypeRep (RoutingTable rep _) = rep
+getTypeRep :: RoutingTableWithType a -> TypeRep
+getTypeRep (RoutingTableWithType rep _) = rep
 
 
-data RoutingTableCore a where
-  AnyPiece :: RoutingTableCore T.Text
-  Piece :: T.Text -> RoutingTableCore T.Text
-  FmapPath :: (a -> b) -> RoutingTableCore a -> RoutingTableCore b
+withoutTypeRep :: RoutingTableWithType a -> RoutingTable a
+withoutTypeRep (RoutingTableWithType _rep tbl) = tbl
+
+
+data RoutingTable a where
+  AnyPiece :: RoutingTable T.Text
+  Piece :: T.Text -> RoutingTable T.Text
+  FmapPath :: (a -> b) -> RoutingTable a -> RoutingTable b
   -- ^ '<$>'
-  PurePath :: a -> RoutingTableCore a
-  ApPath :: RoutingTableCore (a -> b) -> RoutingTableCore a -> RoutingTableCore b
+  PurePath :: a -> RoutingTable a
+  ApPath :: RoutingTable (a -> b) -> RoutingTable a -> RoutingTable b
   -- ^ '<*>'
-  AltPath :: RoutingTableCore a -> RoutingTableCore a -> RoutingTableCore a
+  AltPath :: RoutingTable a -> RoutingTable a -> RoutingTable a
   -- ^ '<>'
-  ParsedPath :: (T.Text -> Either String (a, T.Text)) -> RoutingTableCore a
+  ParsedPath :: (T.Text -> Either String (a, T.Text)) -> RoutingTable a
 
-instance Functor RoutingTableCore where
+instance Functor RoutingTable where
   fmap = FmapPath
 
-instance Applicative RoutingTableCore where
+instance Applicative RoutingTable where
   pure = PurePath
   (<*>) = ApPath
 
-instance Semigroup (RoutingTableCore a) where
+instance Semigroup (RoutingTable a) where
   (<>) = AltPath
 
 
-anyPiece :: RoutingTableCore T.Text
+anyPiece :: RoutingTable T.Text
 anyPiece = AnyPiece
 
 
-piece :: T.Text -> RoutingTableCore T.Text
+piece :: T.Text -> RoutingTable T.Text
 piece = Piece
 
 
@@ -140,24 +146,24 @@ piece = Piece
 -- path "foo/example/users" *> decimalPiece
 
 -- :id of /for/example/users/:id
-decimalPiece :: RoutingTableCore Integer
+decimalPiece :: RoutingTable Integer
 decimalPiece = ParsedPath TR.decimal
 
 
-path :: T.Text -> RoutingTableCore ()
+path :: T.Text -> RoutingTable ()
 path pathWithSlash = traverse_ piece ps
  where
   ps = filter (/= "") $ T.split (== '/') pathWithSlash
 
 
-pathWithSlashes :: T.Text -> RoutingTableCore ()
+pathWithSlashes :: T.Text -> RoutingTable ()
 pathWithSlashes pathWithSlash = traverse_ piece ps
  where
   ps = T.split (== '/') pathWithSlash
 
 
-runRoutingTable :: RoutingTable a -> Request -> Maybe a
-runRoutingTable (RoutingTable _rep tbl) req = do
+runRoutingTable :: RoutingTableWithType a -> Request -> Maybe a
+runRoutingTable (RoutingTableWithType _rep tbl) req = do
   -- TODO: Redirect when finding consecutive slashes.
   -- TODO: Join pathInfo, then parse as raw path string.
   (x, left) <- parseByRoutingTable tbl . filter (/= "") $ pathInfo req
@@ -165,7 +171,7 @@ runRoutingTable (RoutingTable _rep tbl) req = do
   return x
 
 data Handler where
-  Handler :: (Typeable a, Typeable resObj) => String -> RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
+  Handler :: (Typeable a, Typeable resObj) => String -> RoutingTableWithType a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
 
 data ToFromResponseBody resObj = ToFromResponseBody
   { resObjType       :: TypeRep
@@ -194,8 +200,8 @@ text = toFromResponseBody
   (return . BL.fromStrict . TE.encodeUtf8)
   (return . TE.decodeUtf8 . BL.toStrict)
 
-handler :: forall a resObj. (Typeable a, Typeable resObj) => String -> RoutingTableCore a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
-handler name tbl = Handler name (RoutingTable (typeRep (Proxy :: Proxy a)) tbl)
+handler :: forall a resObj. (Typeable a, Typeable resObj) => String -> RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
+handler name tbl = Handler name (RoutingTableWithType (typeRep (Proxy :: Proxy a)) tbl)
 
 
 handles :: [Handler] -> Application
@@ -217,7 +223,7 @@ runHandler (Handler _name tbl hdl tfr) req =
     return $ responseLBS status200 [] resBody
 
 
-parseByRoutingTable :: RoutingTableCore a -> [T.Text] -> Maybe (a, [T.Text])
+parseByRoutingTable :: RoutingTable a -> [T.Text] -> Maybe (a, [T.Text])
 parseByRoutingTable AnyPiece     = PathParser.run PathParser.anyPiece
 parseByRoutingTable (Piece p) = PathParser.run $ PathParser.piece p
 parseByRoutingTable (FmapPath f tbl) = \inp -> first f <$> parseByRoutingTable tbl inp
@@ -241,7 +247,7 @@ parseByRoutingTable (ParsedPath parser) = \inp ->
 showRoutes :: [Handler] -> TLB.Builder
 showRoutes = ("/" <>) . foldMap ((<> "\n/") . showRoutes' . extractRoutingTable)
 
-showRoutes' :: RoutingTableCore a -> TLB.Builder
+showRoutes' :: RoutingTable a -> TLB.Builder
 showRoutes' AnyPiece             = "*"
 showRoutes' (Piece p)            = TLB.fromText p
 showRoutes' (FmapPath _f tbl)    = showRoutes' tbl
@@ -250,5 +256,5 @@ showRoutes' (ApPath tblF tblA)   = showRoutes' tblF <> "/" <> showRoutes' tblA
 showRoutes' (AltPath tblA tblB)  = showRoutes' tblA <> "\n/" <> showRoutes' tblB
 showRoutes' (ParsedPath _parser) = ":param" -- TODO: Name the parameter
 
-extractRoutingTable :: Handler -> RoutingTableCore ()
-extractRoutingTable (Handler _name (RoutingTable _rep tbl) _hdl _tfr) = void tbl
+extractRoutingTable :: Handler -> RoutingTable ()
+extractRoutingTable (Handler _name (RoutingTableWithType _rep tbl) _hdl _tfr) = void tbl
