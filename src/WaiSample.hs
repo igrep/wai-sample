@@ -202,7 +202,7 @@ handler name tbl = Handler name (RoutingTableWithType (typeRep (Proxy :: Proxy a
 
 handles :: [Handler] -> Application
 handles hdls req respond' = bracket_ (putStrLn "Allocating") (putStrLn "Cleaning") $ do
-  let foundResponds = listToMaybe $ mapMaybe (\hdl -> runHandler hdl req) hdls
+  let foundResponds = listToMaybe $ mapMaybe (`runHandler` req) hdls
   case foundResponds of
       Just respond -> respond' =<< respond
       Nothing      -> respond' handle404
@@ -223,7 +223,7 @@ parseByRoutingTable :: RoutingTable a -> [T.Text] -> Maybe (a, [T.Text])
 parseByRoutingTable AnyPiece     = PathParser.run PathParser.anyPiece
 parseByRoutingTable (Piece p) = PathParser.run $ PathParser.piece p
 parseByRoutingTable (FmapPath f tbl) = \inp -> first f <$> parseByRoutingTable tbl inp
-parseByRoutingTable (PurePath x) = \inp -> (Just (x, inp))
+parseByRoutingTable (PurePath x) = \inp -> Just (x, inp)
 parseByRoutingTable (ApPath tblF tblA) = \inp -> do
   (f, out) <- parseByRoutingTable tblF inp
   first f <$> parseByRoutingTable tblA out
