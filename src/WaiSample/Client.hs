@@ -10,9 +10,9 @@ import           Data.Char                  (toUpper)
 import qualified Data.Text                  as T
 import           Data.Typeable              (TypeRep, tyConModule, tyConName,
                                              tyConPackage, typeOf, typeRepTyCon)
-import           Language.Haskell.TH        (Dec, DecQ, DecsQ, TypeQ, appT,
-                                             clause, conT, funD, mkName,
-                                             normalB, sigD, varE, varP)
+import           Language.Haskell.TH        (DecsQ, TypeQ, appT, clause, conT,
+                                             funD, mkName, normalB, sigD, varE,
+                                             varP)
 import           Language.Haskell.TH.Syntax (ModName (ModName), Name (Name),
                                              NameFlavour (NameG),
                                              NameSpace (TcClsName),
@@ -25,10 +25,10 @@ declareClient :: String -> [Handler] -> DecsQ
 declareClient prefix = fmap concat . mapM declareEndpointFunction
  where
   declareEndpointFunction :: Handler -> DecsQ
-  declareEndpointFunction (Handler handlerName tbl _action toFromResponseBody) = do
+  declareEndpointFunction (Handler handlerName tbl action) = do
     let funName = mkName $ makeUpName handlerName
         typeRepArg = getTypeRep tbl
-        typeRepRtn = resObjType toFromResponseBody
+        typeRepRtn = getResponseObjectType action
         typeQRtn = [t| IO |] `appT` typeRepToTypeQ typeRepRtn
         typeQTail =
           if typeRepArg == typeOf ()
@@ -37,12 +37,11 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     sig <- sigD funName $  [t| (->) Backend |] `appT` typeQTail
 
     let bd = mkName "bd"
-        path = pathBuilderFromRoutingTable $ withoutTypeRep tbl
-        fromResBody = fromResponseBody toFromResponseBody
+        p = pathBuilderFromRoutingTable $ withoutTypeRep tbl
         implE = [e|
             do
-              resBody <- $(varE bd) path
-              return $ fromResBody resBody
+              resBody <- $(varE bd) p
+              return $ fromResponseBody resBody
           |]
     def <- funD
       funName

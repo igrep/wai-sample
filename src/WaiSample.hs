@@ -16,7 +16,9 @@ module WaiSample
   , RoutingTable (..)
   , RoutingTableWithType (..)
   , ToFromResponseBody (..)
+  , Json (..)
   , getTypeRep
+  , getResponseObjectType
   , withoutTypeRep
   , showRoutes
   , printRoutes
@@ -38,7 +40,8 @@ import qualified Data.Text.Encoding         as TE
 import qualified Data.Text.Lazy.Builder     as TLB
 import qualified Data.Text.Lazy.IO          as TLIO
 import qualified Data.Text.Read             as TR
-import           Data.Typeable              (TypeRep, Typeable, typeRep)
+import           Data.Typeable              (TypeRep, Typeable, typeOf, typeRep,
+                                             typeRepArgs)
 import           GHC.Generics               (Generic)
 import           Network.HTTP.Types.Status  (status200, status404)
 import           Network.Wai                (Application, Request, Response,
@@ -53,22 +56,20 @@ app = handles routes
 
 routes :: [Handler]
 routes =
-  [ handler "index" (path "/") (\_ -> return "index") text
-  , handler "aboutUs" (path "/about/us") (\_ -> return "About IIJ") text
-  , handler "aboutUsFinance" (path "/about/us/finance") (\_ -> return "Financial Report 2020") text
-  , handler "aboutFinance" (path "/about/finance") (\_ -> return "Financial Report 2020 /") text
-  , handler "aboutFinanceImpossible" (path "/about//finance") (\_ -> fail "This should not be executed.") text
+  [ handler "index" (path "/") (\_ -> return ("index" :: T.Text))
+  , handler "aboutUs" (path "/about/us") (\_ -> return ("About IIJ" :: T.Text))
+  , handler "aboutUsFinance" (path "/about/us/finance") (\_ -> return ("Financial Report 2020" :: T.Text))
+  , handler "aboutFinance" (path "/about/finance") (\_ -> return ("Financial Report 2020 /" :: T.Text))
+  , handler "aboutFinanceImpossible" (path "/about//finance") (\_ -> (fail "This should not be executed." :: IO T.Text))
   , handler "customerId"
       (path "/customer/" *> decimalPiece)
       (\i -> return $ "Customer ID: " <> T.pack (show i))
-      text
   , handler "customerIdJson"
     (path "/customer/" *> decimalPiece <* Piece "json")
-    (\i -> return $ Customer
+    (\i -> return . Json $ Customer
       { customerName = "Mr. " <> T.pack (show i)
       , customerId = i
       })
-    json
   ]
 
 
@@ -171,36 +172,31 @@ runRoutingTable (RoutingTableWithType _rep tbl) req = do
   return x
 
 data Handler where
-  Handler :: (Typeable a, Typeable resObj) => String -> RoutingTableWithType a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
+  Handler :: (Typeable a, ToFromResponseBody resObj) => String -> RoutingTableWithType a -> (a -> IO resObj) -> Handler
 
-data ToFromResponseBody resObj = ToFromResponseBody
-  { resObjType       :: TypeRep
-  , toResponseBody   :: resObj -> IO BL.ByteString
-  , fromResponseBody :: BL.ByteString -> IO resObj
-  }
+class Typeable resObj => ToFromResponseBody resObj where
+  toResponseBody   :: resObj -> IO BL.ByteString
+  fromResponseBody :: BL.ByteString -> IO resObj
   -- TODO: Add mimetype
   -- TODO: Add Negotiation with Content-Type
   -- TODO: Add other header, status code etc.
 
+newtype Json a = Json { unJson :: a }
 
-toFromResponseBody
-  :: forall resObj. Typeable resObj
-  => (resObj -> IO BL.ByteString)
-  -> (BL.ByteString -> IO resObj)
-  -> ToFromResponseBody resObj
-toFromResponseBody = ToFromResponseBody (typeRep (Proxy :: Proxy resObj))
+instance (ToJSON resObj, FromJSON resObj, Typeable resObj) => ToFromResponseBody (Json resObj) where
+  toResponseBody = return . Json.encode . unJson
+  fromResponseBody = either fail (return . Json) . Json.eitherDecode'
 
-json :: (Typeable resObj, ToJSON resObj, FromJSON resObj) => ToFromResponseBody resObj
-json = toFromResponseBody
-  (return . Json.encode)
-  (either fail return . Json.eitherDecode')
+instance ToFromResponseBody T.Text where
+  toResponseBody = return . BL.fromStrict . TE.encodeUtf8
+  fromResponseBody = return . TE.decodeUtf8 . BL.toStrict
 
-text :: ToFromResponseBody T.Text
-text = toFromResponseBody
-  (return . BL.fromStrict . TE.encodeUtf8)
-  (return . TE.decodeUtf8 . BL.toStrict)
 
-handler :: forall a resObj. (Typeable a, Typeable resObj) => String -> RoutingTable a -> (a -> IO resObj) -> ToFromResponseBody resObj -> Handler
+getResponseObjectType :: (Typeable a, Typeable resObj) => (a -> IO resObj) -> TypeRep
+getResponseObjectType = last . typeRepArgs . last . typeRepArgs . typeOf
+
+
+handler :: forall a resObj. (Typeable a, ToFromResponseBody resObj) => String -> RoutingTable a -> (a -> IO resObj) -> Handler
 handler name tbl = Handler name (RoutingTableWithType (typeRep (Proxy :: Proxy a)) tbl)
 
 
@@ -215,11 +211,11 @@ handles hdls req respond' = bracket_ (putStrLn "Allocating") (putStrLn "Cleaning
 
 
 runHandler :: Handler -> Request -> Maybe (IO Response)
-runHandler (Handler _name tbl hdl tfr) req =
+runHandler (Handler _name tbl hdl ) req =
   act <$> runRoutingTable tbl req
  where
   act x = do
-    resBody <- toResponseBody tfr =<< hdl x
+    resBody <- toResponseBody =<< hdl x
     return $ responseLBS status200 [] resBody
 
 
@@ -257,4 +253,4 @@ showRoutes' (AltPath tblA tblB)  = showRoutes' tblA <> "\n/" <> showRoutes' tblB
 showRoutes' (ParsedPath _parser) = ":param" -- TODO: Name the parameter
 
 extractRoutingTable :: Handler -> RoutingTable ()
-extractRoutingTable (Handler _name (RoutingTableWithType _rep tbl) _hdl _tfr) = void tbl
+extractRoutingTable (Handler _name (RoutingTableWithType _rep tbl) _hdl) = void tbl
