@@ -89,7 +89,6 @@ data Customer = Customer
   { customerName :: T.Text
   , customerId   :: Integer
   } deriving (Generic, Show)
--- TODO: Genericについて解説
 
 instance ToJSON Customer where
   toEncoding = Json.genericToEncoding Json.defaultOptions
