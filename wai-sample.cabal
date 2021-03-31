@@ -37,6 +37,7 @@ library
       aeson
     , bytestring
     , wai
+    , http-api-data
     , http-types
     , http-conduit
     , template-haskell

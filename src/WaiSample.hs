@@ -33,19 +33,19 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Foldable              (traverse_)
 import           Data.Functor               (void)
 import           Data.Maybe                 (listToMaybe, mapMaybe)
-import           Data.Monoid                (First (First, getFirst))
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import qualified Data.Text.Encoding         as TE
 import qualified Data.Text.Lazy.Builder     as TLB
 import qualified Data.Text.Lazy.IO          as TLIO
-import qualified Data.Text.Read             as TR
 import           Data.Typeable              (TypeRep, Typeable, typeOf, typeRep,
                                              typeRepArgs)
 import           GHC.Generics               (Generic)
 import           Network.HTTP.Types.Status  (status200, status404)
 import           Network.Wai                (Application, Request, Response,
                                              pathInfo, responseLBS)
+import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData,
+                                             parseUrlPiece)
 
 import qualified WaiSample.PathParser       as PathParser
 
@@ -120,9 +120,7 @@ data RoutingTable a where
   PurePath :: a -> RoutingTable a
   ApPath :: RoutingTable (a -> b) -> RoutingTable a -> RoutingTable b
   -- ^ '<*>'
-  AltPath :: RoutingTable a -> RoutingTable a -> RoutingTable a
-  -- ^ '<>'
-  ParsedPath :: (T.Text -> Either String (a, T.Text)) -> RoutingTable a
+  ParsedPath :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => Proxy a -> RoutingTable a
 
 instance Functor RoutingTable where
   fmap = FmapPath
@@ -130,9 +128,6 @@ instance Functor RoutingTable where
 instance Applicative RoutingTable where
   pure = PurePath
   (<*>) = ApPath
-
-instance Semigroup (RoutingTable a) where
-  (<>) = AltPath
 
 
 anyPiece :: RoutingTable T.Text
@@ -148,7 +143,7 @@ piece = Piece
 
 -- :id of /for/example/users/:id
 decimalPiece :: RoutingTable Integer
-decimalPiece = ParsedPath TR.decimal
+decimalPiece = ParsedPath Proxy
 
 
 path :: T.Text -> RoutingTable ()
@@ -219,7 +214,7 @@ runHandler (Handler _name tbl hdl ) req =
     return $ responseLBS status200 [] resBody
 
 
-parseByRoutingTable :: RoutingTable a -> [T.Text] -> Maybe (a, [T.Text])
+parseByRoutingTable :: forall a. RoutingTable a -> [T.Text] -> Maybe (a, [T.Text])
 parseByRoutingTable AnyPiece     = PathParser.run PathParser.anyPiece
 parseByRoutingTable (Piece p) = PathParser.run $ PathParser.piece p
 parseByRoutingTable (FmapPath f tbl) = \inp -> first f <$> parseByRoutingTable tbl inp
@@ -227,15 +222,12 @@ parseByRoutingTable (PurePath x) = \inp -> Just (x, inp)
 parseByRoutingTable (ApPath tblF tblA) = \inp -> do
   (f, out) <- parseByRoutingTable tblF inp
   first f <$> parseByRoutingTable tblA out
-parseByRoutingTable (AltPath tblA tblB) = \inp ->
-  getFirst $ First (parseByRoutingTable tblA inp) <> First (parseByRoutingTable tblB inp)
-parseByRoutingTable (ParsedPath parser) = \inp ->
+parseByRoutingTable (ParsedPath _) = \inp ->
   case inp of
     p : ps ->
-      case parser p of
-          Right (x, "") -> Just (x, ps)
-          Right _       -> Nothing
-          Left _        -> Nothing
+      case parseUrlPiece p :: Either T.Text a of
+          Right x -> Just (x, ps)
+          Left _  -> Nothing
     [] -> Nothing
 
 
@@ -249,7 +241,6 @@ showRoutes' (Piece p)            = TLB.fromText p
 showRoutes' (FmapPath _f tbl)    = showRoutes' tbl
 showRoutes' (PurePath _x)        = ""
 showRoutes' (ApPath tblF tblA)   = showRoutes' tblF <> "/" <> showRoutes' tblA
-showRoutes' (AltPath tblA tblB)  = showRoutes' tblA <> "\n/" <> showRoutes' tblB
 showRoutes' (ParsedPath _parser) = ":param" -- TODO: Name the parameter
 
 extractRoutingTable :: Handler -> RoutingTable ()

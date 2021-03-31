@@ -9,7 +9,8 @@ import qualified Data.ByteString.Lazy       as BL
 import           Data.Char                  (toUpper)
 import qualified Data.Text                  as T
 import           Data.Typeable              (TypeRep, tyConModule, tyConName,
-                                             tyConPackage, typeOf, typeRepTyCon)
+                                             tyConPackage, typeOf, typeRep,
+                                             typeRepTyCon)
 import           Language.Haskell.TH        (DecsQ, TypeQ, appT, clause, conT,
                                              funD, mkName, normalB, sigD, varE,
                                              varP)
@@ -33,8 +34,8 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         typeQTail =
           if typeRepArg == typeOf ()
             then typeQRtn
-            else [t| (->) |] `appT` typeRepToTypeQ typeRepArg `appT` typeQRtn
-    sig <- sigD funName $  [t| (->) Backend |] `appT` typeQTail
+            else typeRepToTypeQ typeRepArg `funcT` typeQRtn
+    sig <- sigD funName $  [t| Backend |] `funcT` typeQTail
 
     let bd = mkName "bd"
         p = pathBuilderFromRoutingTable $ withoutTypeRep tbl
@@ -59,13 +60,29 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
   toUpperFirst _              = error "toUpperFirst: Empty handler name!"
 
 
+-- e.g. Integer -> Integer -> String
+-- TODO: Test with RoutingTable receiving several parameters
+pathBuilderSigFromRoutingTable :: RoutingTable a -> TypeQ
+pathBuilderSigFromRoutingTable = foldr funcT [t| String |] . reverse . go []
+ where
+  go :: [TypeQ] -> RoutingTable b -> [TypeQ]
+  go tqs AnyPiece             = tqs
+  go tqs (Piece _p)           = tqs
+  go tqs (FmapPath _f tbl)    = go tqs tbl
+  go tqs (PurePath _x)        = tqs
+  go tqs (ApPath tblF tblA)   =
+    let tqs' = go tqs tblF
+     in go tqs' tblA
+  go tqs (ParsedPath proxy)   = typeRepToTypeQ (typeRep proxy) : tqs
+
+
+-- pathBuilderFromRoutingTable :: RoutingTable a -> ExpQ
 pathBuilderFromRoutingTable :: RoutingTable a -> String
 pathBuilderFromRoutingTable AnyPiece             = "*"
 pathBuilderFromRoutingTable (Piece p)            = T.unpack p
 pathBuilderFromRoutingTable (FmapPath _f tbl)    = pathBuilderFromRoutingTable tbl
 pathBuilderFromRoutingTable (PurePath _x)        = ""
 pathBuilderFromRoutingTable (ApPath tblF tblA)   = pathBuilderFromRoutingTable tblF <> "/" <> pathBuilderFromRoutingTable tblA
-pathBuilderFromRoutingTable (AltPath tblA tblB)  = undefined -- TODO
 pathBuilderFromRoutingTable (ParsedPath _parser) = undefined -- TODO
 
 
@@ -80,6 +97,13 @@ typeRepToTypeQ rep = conT $ Name occName nameFlavour
       (PkgName $ tyConPackage tyCon)
       (ModName $ tyConModule tyCon)
   tyCon = typeRepTyCon rep
+
+
+-- | Generate a type 'a -> b'
+funcT :: TypeQ -> TypeQ -> TypeQ
+funcT a b = [t| (->) |] `appT` a `appT` b
+
+infixr 1 `funcT`
 
 
 type Backend = String -> IO BL.ByteString
