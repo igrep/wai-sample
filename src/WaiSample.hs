@@ -14,6 +14,7 @@ module WaiSample
   , piece
   , decimalPiece
   , Handler (..)
+  , handler
   , RoutingTable (..)
   , RoutingTableWithType (..)
   , ToFromResponseBody (..)
