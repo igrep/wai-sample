@@ -9,6 +9,7 @@ module WaiSample
   , anyPiece
   , routes
   , path
+  , paramPiece
   , pathWithSlashes
   , piece
   , decimalPiece
@@ -143,6 +144,10 @@ piece = Piece
 -- :id of /for/example/users/:id
 decimalPiece :: RoutingTable Integer
 decimalPiece = ParsedPath Proxy
+
+
+paramPiece :: forall a. (ToHttpApiData a, FromHttpApiData a, Typeable a) => RoutingTable a
+paramPiece = ParsedPath (Proxy :: Proxy a)
 
 
 path :: T.Text -> RoutingTable ()
