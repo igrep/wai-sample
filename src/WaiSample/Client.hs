@@ -2,18 +2,20 @@
 {-# LANGUAGE TemplateHaskell #-}
 module WaiSample.Client
   ( declareClient
+  , pathBuilderSigFromRoutingTable
   , Backend
   ) where
 
 import qualified Data.ByteString.Lazy       as BL
 import           Data.Char                  (toUpper)
+import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import           Data.Typeable              (TypeRep, tyConModule, tyConName,
                                              tyConPackage, typeOf, typeRep,
                                              typeRepTyCon)
-import           Language.Haskell.TH        (DecsQ, TypeQ, appT, clause, conT,
-                                             funD, mkName, normalB, sigD, varE,
-                                             varP)
+import           Language.Haskell.TH        (DecsQ, ExpQ, TypeQ, appT, clause,
+                                             conT, funD, mkName, normalB, sigD,
+                                             varE, varP)
 import           Language.Haskell.TH.Syntax (ModName (ModName), Name (Name),
                                              NameFlavour (NameG),
                                              NameSpace (TcClsName),
@@ -35,13 +37,15 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
           if typeRepArg == typeOf ()
             then typeQRtn
             else typeRepToTypeQ typeRepArg `funcT` typeQRtn
+    -- TODO: Use pathBuilderSigFromRoutingTable
     sig <- sigD funName $  [t| Backend |] `funcT` typeQTail
 
     let bd = mkName "bd"
         p = pathBuilderFromRoutingTable $ withoutTypeRep tbl
-        implE = [e|
+        -- TODO: generate arguments `VarP`s
+        implE = [e| \aaa ->
             do
-              resBody <- $(varE bd) p
+              resBody <- $(varE bd) $ $(p) aaa
               return $ fromResponseBody resBody
           |]
     def <- funD
@@ -61,12 +65,11 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
 
 
 -- e.g. Integer -> Integer -> String
--- TODO: Test with RoutingTable receiving several parameters
 pathBuilderSigFromRoutingTable :: RoutingTable a -> TypeQ
 pathBuilderSigFromRoutingTable = foldr funcT [t| String |] . reverse . go []
  where
   go :: [TypeQ] -> RoutingTable b -> [TypeQ]
-  go tqs AnyPiece             = tqs
+  go tqs AnyPiece             = typeRepToTypeQ (typeRep (Proxy :: Proxy T.Text)) : tqs
   go tqs (Piece _p)           = tqs
   go tqs (FmapPath _f tbl)    = go tqs tbl
   go tqs (PurePath _x)        = tqs
@@ -76,7 +79,18 @@ pathBuilderSigFromRoutingTable = foldr funcT [t| String |] . reverse . go []
   go tqs (ParsedPath proxy)   = typeRepToTypeQ (typeRep proxy) : tqs
 
 
--- pathBuilderFromRoutingTable :: RoutingTable a -> ExpQ
+pathBuilderFromRoutingTable :: RoutingTable a -> ExpQ
+pathBuilderFromRoutingTable = foldr build [e| "" |] . reverse . go []
+ where
+  -- TODO
+  build :: ExpQ -> ExpQ -> ExpQ
+  build = undefined
+
+  -- TODO
+  go :: [TypeQ] -> RoutingTable b -> [ExpQ]
+  go = undefined
+
+{-
 pathBuilderFromRoutingTable :: RoutingTable a -> String
 pathBuilderFromRoutingTable AnyPiece             = "*"
 pathBuilderFromRoutingTable (Piece p)            = T.unpack p
@@ -84,6 +98,7 @@ pathBuilderFromRoutingTable (FmapPath _f tbl)    = pathBuilderFromRoutingTable t
 pathBuilderFromRoutingTable (PurePath _x)        = ""
 pathBuilderFromRoutingTable (ApPath tblF tblA)   = pathBuilderFromRoutingTable tblF <> "/" <> pathBuilderFromRoutingTable tblA
 pathBuilderFromRoutingTable (ParsedPath _parser) = undefined -- TODO
+-}
 
 
 -- TODO: Perhaps we should fix the case where the TypeRep object has arguments (e.g. Maybe Int).
