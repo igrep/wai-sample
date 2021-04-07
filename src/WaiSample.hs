@@ -220,7 +220,7 @@ runHandler (Handler _name tbl hdl ) req =
 
 
 parseByRoutingTable :: forall a. RoutingTable a -> [T.Text] -> Maybe (a, [T.Text])
-parseByRoutingTable AnyPiece     = PathParser.run PathParser.anyPiece
+parseByRoutingTable AnyPiece = PathParser.run PathParser.anyPiece
 parseByRoutingTable (Piece p) = PathParser.run $ PathParser.piece p
 parseByRoutingTable (FmapPath f tbl) = \inp -> first f <$> parseByRoutingTable tbl inp
 parseByRoutingTable (PurePath x) = \inp -> Just (x, inp)
