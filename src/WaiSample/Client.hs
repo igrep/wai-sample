@@ -2,7 +2,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 module WaiSample.Client
   ( declareClient
-  , pathBuilderSigFromRoutingTable
   , Backend
   ) where
 
@@ -28,20 +27,20 @@ declareClient :: String -> [Handler] -> DecsQ
 declareClient prefix = fmap concat . mapM declareEndpointFunction
  where
   declareEndpointFunction :: Handler -> DecsQ
-  declareEndpointFunction (Handler handlerName tbl action) = do
+  declareEndpointFunction (Handler handlerName tblT action) = do
     let funName = mkName $ makeUpName handlerName
-        typeRepArg = getTypeRep tbl
+        typeRepArg = getTypeRep tblT
+        tbl = withoutTypeRep tblT
         typeRepRtn = getResponseObjectType action
         typeQRtn = [t| IO |] `appT` typeRepToTypeQ typeRepRtn
         typeQTail =
           if typeRepArg == typeOf ()
             then typeQRtn
             else typeRepToTypeQ typeRepArg `funcT` typeQRtn
-    -- TODO: Use pathBuilderSigFromRoutingTable
-    sig <- sigD funName $  [t| Backend |] `funcT` typeQTail
+    sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQTail tbl
 
     let bd = mkName "bd"
-        p = pathBuilderFromRoutingTable $ withoutTypeRep tbl
+        p = pathBuilderFromRoutingTable tbl
         -- TODO: generate arguments `VarP`s
         implE = [e| \aaa ->
             do
@@ -65,8 +64,8 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
 
 
 -- e.g. Integer -> Integer -> String
-pathBuilderSigFromRoutingTable :: RoutingTable a -> TypeQ
-pathBuilderSigFromRoutingTable = foldr funcT [t| String |] . reverse . go []
+typeQFromRoutingTable :: TypeQ -> RoutingTable a -> TypeQ
+typeQFromRoutingTable typeQTail = foldr funcT typeQTail  . reverse . go []
  where
   go :: [TypeQ] -> RoutingTable b -> [TypeQ]
   go tqs AnyPiece             = typeRepToTypeQ (typeRep (Proxy :: Proxy T.Text)) : tqs
