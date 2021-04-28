@@ -5,6 +5,7 @@ module WaiSample.Client
   , Backend
   ) where
 
+import           Control.Monad.State.Strict (State, evalState, get, put)
 import qualified Data.ByteString.Lazy       as BL
 import           Data.Char                  (toLower, toUpper)
 import           Data.Proxy                 (Proxy (Proxy))
@@ -95,19 +96,34 @@ argumentNamesFromRoutingTable = reverse . go []
 
 
 pathBuilderFromRoutingTable :: [Q Name] -> RoutingTable a -> ExpQ
-pathBuilderFromRoutingTable qns = fst . go qns
+pathBuilderFromRoutingTable qns = (`evalState` qns) . go
  where
-  go :: [Q Name] -> RoutingTable b -> (ExpQ, [Q Name])
-  go (arg0 : args) AnyPiece              = ([e| $(varE =<< arg0) |], args)
-  go  args          (Piece p)            = ([e| $(stringE $ T.unpack p) |], args)
-  go  args          (FmapPath _f tbl)    = go args tbl
-  go  args          (PurePath _x)        = ([e| "" |], args)
-  go  args          (ApPath tblF tblA)   =
-    let (eq0, args0) = go args tblF
-        (eq1, args1) = go args0 tblA
-     in ([e| $(eq0) ++ "/" ++ $(eq1) |], args1)
-  go (arg0 : args)  (ParsedPath _proxy) = ([e| T.unpack $ toUrlPiece $(varE =<< arg0) |], args)
-  go [] _ = error "pathBuilderFromRoutingTable: Assertion failure: No more argument names!"
+  go :: RoutingTable b -> State [Q Name] ExpQ
+  go AnyPiece = do
+    arg0 <- popArgs
+    return [e| $(varE =<< arg0) |]
+  go (Piece p) =
+    return [e| $(stringE $ T.unpack p) |]
+  go (FmapPath _f tbl) =
+    go tbl
+  go (PurePath _x) =
+    return [e| "" |]
+  go (ApPath tblF tblA) = do
+    eq0 <- go tblF
+    eq1 <- go tblA
+    return [e| $(eq0) ++ "/" ++ $(eq1) |]
+  go (ParsedPath _proxy) = do
+    arg0 <- popArgs
+    return [e| T.unpack $ toUrlPiece $(varE =<< arg0) |]
+
+  popArgs :: State [Q Name] (Q Name)
+  popArgs = do
+    args <- get
+    case args of
+      [] -> error "pathBuilderFromRoutingTable: Assertion failure: No more argument names!"
+      (arg0 : argsLeft) -> do
+        put argsLeft
+        return arg0
 
 {-
 pathBuilderFromRoutingTable :: RoutingTable a -> String
