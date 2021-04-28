@@ -12,9 +12,10 @@ import qualified Data.Text                  as T
 import           Data.Typeable              (TypeRep, tyConModule, tyConName,
                                              tyConPackage, typeOf, typeRep,
                                              typeRepTyCon)
-import           Language.Haskell.TH        (DecsQ, ExpQ, Q, TypeQ, appE, appT,
+import           Language.Haskell.TH        (DecsQ, ExpQ, Q, TypeQ, appT,
                                              clause, conT, funD, mkName,
-                                             newName, normalB, sigD, varE, varP)
+                                             newName, normalB, sigD, stringE,
+                                             varE, varP)
 import           Language.Haskell.TH.Syntax (ModName (ModName), Name (Name),
                                              NameFlavour (NameG),
                                              NameSpace (TcClsName),
@@ -93,22 +94,20 @@ argumentNamesFromRoutingTable = reverse . go []
   go tqs (ParsedPath proxy)   = typeRepToNameQ (typeRep proxy) : tqs
 
 
--- TODO: 今回は文字列を組み立てるので、foldrを使う必要はなさそう
 pathBuilderFromRoutingTable :: [Q Name] -> RoutingTable a -> ExpQ
-pathBuilderFromRoutingTable argNames = foldr build [e| "" |] . reverse . go argNames []
+pathBuilderFromRoutingTable qns = fst . go qns
  where
-  -- TODO
-  build :: ExpQ -> ExpQ -> ExpQ
-  build = undefined
-
-  -- TODO
-  go :: [Q Name] -> [ExpQ] -> RoutingTable b -> [ExpQ]
-  go (arg0 : args) eqs AnyPiece             = undefined
-  go  args         eqs (Piece p)            = undefined
-  go  args         eqs (FmapPath _f tbl)    = go args eqs tbl
-  go  args         eqs (PurePath _x)        = undefined
-  go  args         eqs (ApPath tblF tblA)   = undefined
-  go (arg0 : args) eqs (ParsedPath _parser) = undefined
+  go :: [Q Name] -> RoutingTable b -> (ExpQ, [Q Name])
+  go (arg0 : args) AnyPiece              = ([e| $(varE =<< arg0) |], args)
+  go  args          (Piece p)            = ([e| $(stringE $ T.unpack p) |], args)
+  go  args          (FmapPath _f tbl)    = go args tbl
+  go  args          (PurePath _x)        = ([e| "" |], args)
+  go  args          (ApPath tblF tblA)   =
+    let (eq0, args0) = go args tblF
+        (eq1, args1) = go args0 tblA
+     in ([e| $(eq0) ++ "/" ++ $(eq1) |], args1)
+  go (arg0 : args)  (ParsedPath _proxy) = ([e| T.unpack $ toUrlPiece $(varE =<< arg0) |], args)
+  go [] _ = error "pathBuilderFromRoutingTable: Assertion failure: No more argument names!"
 
 {-
 pathBuilderFromRoutingTable :: RoutingTable a -> String
