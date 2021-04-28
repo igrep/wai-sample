@@ -84,14 +84,14 @@ argumentNamesFromRoutingTable :: RoutingTable a -> [Q Name]
 argumentNamesFromRoutingTable = reverse . go []
  where
   go :: [Q Name] -> RoutingTable b -> [Q Name]
-  go tqs AnyPiece             = newName "any" : tqs
-  go tqs (Piece _p)           = tqs
-  go tqs (FmapPath _f tbl)    = go tqs tbl
-  go tqs (PurePath _x)        = tqs
-  go tqs (ApPath tblF tblA)   =
-    let tqs' = go tqs tblF
-     in go tqs' tblA
-  go tqs (ParsedPath proxy)   = typeRepToNameQ (typeRep proxy) : tqs
+  go qns AnyPiece             = newName "any" : qns
+  go qns (Piece _p)           = qns
+  go qns (FmapPath _f tbl)    = go qns tbl
+  go qns (PurePath _x)        = qns
+  go qns (ApPath tblF tblA)   =
+    let qns' = go qns tblF
+     in go qns' tblA
+  go qns (ParsedPath proxy)   = typeRepToNameQ (typeRep proxy) : qns
 
 
 pathBuilderFromRoutingTable :: [Q Name] -> RoutingTable a -> ExpQ
