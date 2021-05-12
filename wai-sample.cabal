@@ -37,6 +37,7 @@ library
       aeson
     , bytestring
     , wai
+    , mtl
     , http-api-data
     , http-types
     , http-conduit
