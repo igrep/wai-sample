@@ -42,8 +42,8 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQTail tbl
 
     let bd = mkName "bd"
-        moreArgs = argumentNamesFromRoutingTable tbl
-        allArgs = varP bd : map (varP =<<) moreArgs
+    moreArgs <- argumentNamesFromRoutingTable tbl
+    let allArgs = varP bd : map varP moreArgs
         p = pathBuilderFromRoutingTable moreArgs tbl
         implE = [e|
             do
@@ -81,8 +81,8 @@ typeQFromRoutingTable typeQTail = foldr funcT typeQTail  . reverse . go []
   go tqs (ParsedPath proxy)   = typeRepToTypeQ (typeRep proxy) : tqs
 
 
-argumentNamesFromRoutingTable :: RoutingTable a -> [Q Name]
-argumentNamesFromRoutingTable = reverse . go []
+argumentNamesFromRoutingTable :: RoutingTable a -> Q [Name]
+argumentNamesFromRoutingTable = sequence . reverse . go []
  where
   go :: [Q Name] -> RoutingTable b -> [Q Name]
   go qns AnyPiece             = newName "any" : qns
@@ -95,13 +95,13 @@ argumentNamesFromRoutingTable = reverse . go []
   go qns (ParsedPath proxy)   = typeRepToNameQ (typeRep proxy) : qns
 
 
-pathBuilderFromRoutingTable :: [Q Name] -> RoutingTable a -> ExpQ
+pathBuilderFromRoutingTable :: [Name] -> RoutingTable a -> ExpQ
 pathBuilderFromRoutingTable qns = (`evalState` qns) . go
  where
-  go :: RoutingTable b -> State [Q Name] ExpQ
+  go :: RoutingTable b -> State [Name] ExpQ
   go AnyPiece = do
     arg0 <- popArgs
-    return [e| $(varE =<< arg0) |]
+    return [e| $(varE arg0) |]
   go (Piece p) =
     return [e| $(stringE $ T.unpack p) |]
   go (FmapPath _f tbl) =
@@ -114,9 +114,9 @@ pathBuilderFromRoutingTable qns = (`evalState` qns) . go
     return [e| $(eq0) ++ "/" ++ $(eq1) |]
   go (ParsedPath _proxy) = do
     arg0 <- popArgs
-    return [e| T.unpack $ toUrlPiece $(varE =<< arg0) |]
+    return [e| T.unpack $ toUrlPiece $(varE arg0) |]
 
-  popArgs :: State [Q Name] (Q Name)
+  popArgs :: State [Name] Name
   popArgs = do
     args <- get
     case args of
