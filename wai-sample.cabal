@@ -36,6 +36,7 @@ library
   build-depends:
       aeson
     , bytestring
+    , lift-type
     , wai
     , mtl
     , http-api-data

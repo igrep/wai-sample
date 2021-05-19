@@ -6,4 +6,4 @@ import           WaiSample
 import           WaiSample.Client
 
 
--- $(declareClient "sample" routes)
+$(declareClient "sample" routes)

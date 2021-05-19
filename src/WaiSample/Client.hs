@@ -1,5 +1,7 @@
-{-# LANGUAGE GADTs           #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TypeApplications    #-}
 module WaiSample.Client
   ( declareClient
   , Backend
@@ -10,36 +12,26 @@ import qualified Data.ByteString.Lazy       as BL
 import           Data.Char                  (toLower, toUpper)
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
-import           Data.Typeable              (TypeRep, tyConModule, tyConName,
-                                             tyConPackage, typeOf, typeRep,
+import           Data.Typeable              (Typeable, tyConName, typeRep,
                                              typeRepTyCon)
 import           Language.Haskell.TH        (DecsQ, ExpQ, Q, TypeQ, appT,
-                                             clause, conT, funD, mkName,
-                                             newName, normalB, sigD, stringE,
-                                             varE, varP)
-import           Language.Haskell.TH.Syntax (ModName (ModName), Name (Name),
-                                             NameFlavour (NameG),
-                                             NameSpace (TcClsName),
-                                             OccName (OccName),
-                                             PkgName (PkgName))
+                                             clause, funD, mkName, newName,
+                                             normalB, sigD, stringE, varE, varP)
+import           Language.Haskell.TH.Syntax (Name)
+import           LiftType                   (liftTypeQ)
 import           WaiSample
+import           Web.HttpApiData            (toUrlPiece)
 
 
 declareClient :: String -> [Handler] -> DecsQ
 declareClient prefix = fmap concat . mapM declareEndpointFunction
  where
   declareEndpointFunction :: Handler -> DecsQ
-  declareEndpointFunction (Handler handlerName tblT action) = do
+  declareEndpointFunction (Handler handlerName tbl action) = do
     let funName = mkName $ makeUpName handlerName
-        typeRepArg = getTypeRep tblT
-        tbl = withoutTypeRep tblT
-        typeRepRtn = getResponseObjectType action
-        typeQRtn = [t| IO |] `appT` typeRepToTypeQ typeRepRtn
-        typeQTail =
-          if typeRepArg == typeOf ()
-            then typeQRtn
-            else typeRepToTypeQ typeRepArg `funcT` typeQRtn
-    sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQTail tbl
+        typeRtn = getResponseObjectType action
+        typeQRtn = [t| IO |] `appT` typeToTypeQ typeRtn
+    sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQRtn tbl
 
     let bd = mkName "bd"
     moreArgs <- argumentNamesFromRoutingTable tbl
@@ -48,7 +40,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         implE = [e|
             do
               resBody <- $(varE bd) $(p)
-              return $ fromResponseBody resBody
+              fromResponseBody resBody
           |]
     def <- funD
       funName
@@ -71,14 +63,14 @@ typeQFromRoutingTable :: TypeQ -> RoutingTable a -> TypeQ
 typeQFromRoutingTable typeQTail = foldr funcT typeQTail  . reverse . go []
  where
   go :: [TypeQ] -> RoutingTable b -> [TypeQ]
-  go tqs AnyPiece             = typeRepToTypeQ (typeRep (Proxy :: Proxy T.Text)) : tqs
+  go tqs AnyPiece             = typeToTypeQ (Proxy :: Proxy T.Text) : tqs
   go tqs (Piece _p)           = tqs
   go tqs (FmapPath _f tbl)    = go tqs tbl
   go tqs (PurePath _x)        = tqs
   go tqs (ApPath tblF tblA)   =
     let tqs' = go tqs tblF
      in go tqs' tblA
-  go tqs (ParsedPath proxy)   = typeRepToTypeQ (typeRep proxy) : tqs
+  go tqs (ParsedPath proxy)   = typeToTypeQ proxy : tqs
 
 
 argumentNamesFromRoutingTable :: RoutingTable a -> Q [Name]
@@ -92,7 +84,7 @@ argumentNamesFromRoutingTable = sequence . reverse . go []
   go qns (ApPath tblF tblA)   =
     let qns' = go qns tblF
      in go qns' tblA
-  go qns (ParsedPath proxy)   = typeRepToNameQ (typeRep proxy) : qns
+  go qns (ParsedPath proxy)   = typeToNameQ proxy : qns
 
 
 pathBuilderFromRoutingTable :: [Name] -> RoutingTable a -> ExpQ
@@ -125,35 +117,16 @@ pathBuilderFromRoutingTable qns = (`evalState` qns) . go
         put argsLeft
         return arg0
 
-{-
-pathBuilderFromRoutingTable :: RoutingTable a -> String
-pathBuilderFromRoutingTable AnyPiece             = "*"
-pathBuilderFromRoutingTable (Piece p)            = T.unpack p
-pathBuilderFromRoutingTable (FmapPath _f tbl)    = pathBuilderFromRoutingTable tbl
-pathBuilderFromRoutingTable (PurePath _x)        = ""
-pathBuilderFromRoutingTable (ApPath tblF tblA)   = pathBuilderFromRoutingTable tblF <> "/" <> pathBuilderFromRoutingTable tblA
-pathBuilderFromRoutingTable (ParsedPath _parser) = undefined -- TODO
--}
+
+typeToTypeQ :: forall t. Typeable t => Proxy t -> TypeQ
+typeToTypeQ _ = liftTypeQ @t
 
 
--- TODO: Perhaps we should fix the case where the TypeRep object has arguments (e.g. Maybe Int).
-typeRepToTypeQ :: TypeRep -> TypeQ
-typeRepToTypeQ rep = conT $ Name occName nameFlavour
- where
-  occName = OccName $ tyConName tyCon
-  nameFlavour =
-    NameG
-      TcClsName
-      (PkgName $ tyConPackage tyCon)
-      (ModName $ tyConModule tyCon)
-  tyCon = typeRepTyCon rep
-
-
-typeRepToNameQ :: TypeRep -> Q Name
-typeRepToNameQ rep = newName namePrefix
+typeToNameQ :: forall t. Typeable t => Proxy t -> Q Name
+typeToNameQ proxy = newName namePrefix
  where
   namePrefix = toLowerFirst $ tyConName tyCon
-  tyCon = typeRepTyCon rep
+  tyCon = typeRepTyCon $ typeRep proxy
 
   toLowerFirst :: String -> String
   toLowerFirst (first : left) = toLower first : left
