@@ -63,7 +63,6 @@ typeQFromRoutingTable :: TypeQ -> RoutingTable a -> TypeQ
 typeQFromRoutingTable typeQTail = foldr funcT typeQTail  . reverse . go []
  where
   go :: [TypeQ] -> RoutingTable b -> [TypeQ]
-  go tqs AnyPiece             = typeToTypeQ (Proxy :: Proxy T.Text) : tqs
   go tqs (Piece _p)           = tqs
   go tqs (FmapPath _f tbl)    = go tqs tbl
   go tqs (PurePath _x)        = tqs
@@ -77,7 +76,6 @@ argumentNamesFromRoutingTable :: RoutingTable a -> Q [Name]
 argumentNamesFromRoutingTable = sequence . reverse . go []
  where
   go :: [Q Name] -> RoutingTable b -> [Q Name]
-  go qns AnyPiece             = newName "any" : qns
   go qns (Piece _p)           = qns
   go qns (FmapPath _f tbl)    = go qns tbl
   go qns (PurePath _x)        = qns
@@ -91,9 +89,6 @@ pathBuilderFromRoutingTable :: [Name] -> RoutingTable a -> ExpQ
 pathBuilderFromRoutingTable qns = (`evalState` qns) . go
  where
   go :: RoutingTable b -> State [Name] ExpQ
-  go AnyPiece = do
-    arg0 <- popArgs
-    return [e| $(varE arg0) |]
   go (Piece p) =
     return [e| $(stringE $ T.unpack p) |]
   go (FmapPath _f tbl) =

@@ -6,7 +6,6 @@
 
 module WaiSample
   ( app
-  , anyPiece
   , routes
   , path
   , paramPiece
@@ -97,7 +96,6 @@ getRoutingTableType _ = Proxy
 
 
 data RoutingTable a where
-  AnyPiece :: RoutingTable T.Text
   Piece :: T.Text -> RoutingTable T.Text
   FmapPath :: (a -> b) -> RoutingTable a -> RoutingTable b
   -- ^ '<$>'
@@ -112,10 +110,6 @@ instance Functor RoutingTable where
 instance Applicative RoutingTable where
   pure = PurePath
   (<*>) = ApPath
-
-
-anyPiece :: RoutingTable T.Text
-anyPiece = AnyPiece
 
 
 piece :: T.Text -> RoutingTable T.Text
@@ -203,7 +197,6 @@ runHandler (Handler _name tbl hdl ) req =
 
 
 parseByRoutingTable :: forall a. RoutingTable a -> [T.Text] -> Maybe (a, [T.Text])
-parseByRoutingTable AnyPiece = PathParser.run PathParser.anyPiece
 parseByRoutingTable (Piece p) = PathParser.run $ PathParser.piece p
 parseByRoutingTable (FmapPath f tbl) = \inp -> first f <$> parseByRoutingTable tbl inp
 parseByRoutingTable (PurePath x) = \inp -> Just (x, inp)
@@ -224,7 +217,6 @@ showRoutes :: [Handler] -> TLB.Builder
 showRoutes = ("/" <>) . foldMap ((<> "\n/") . showRoutes' . extractRoutingTable)
 
 showRoutes' :: RoutingTable a -> TLB.Builder
-showRoutes' AnyPiece           = "*"
 showRoutes' (Piece p)          = TLB.fromText p
 showRoutes' (FmapPath _f tbl)  = showRoutes' tbl
 showRoutes' (PurePath _x)      = ""
