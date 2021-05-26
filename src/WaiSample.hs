@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo             #-}
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
@@ -52,11 +53,6 @@ app :: Application
 app = handles routes
 
 
--- TODO:
---   Drop AnyPiece constructor
---   route with FmapPath
---   route with PurePath
---   route with (,) <*> decimalPiece <*> decimalPiece
 routes :: [Handler]
 routes =
   [ handler "index" (path "/") (\_ -> return ("index" :: T.Text))
@@ -73,6 +69,17 @@ routes =
       { customerName = "Mr. " <> T.pack (show i)
       , customerId = i
       })
+  , handler "customerTransaction"
+    ( do
+        path "/customer/"
+        cId <- decimalPiece
+        path "/transaction/"
+        transactionName <- T.replicate 2 <$> paramPiece
+        pure (cId, transactionName)
+      )
+    (\(cId, transactionName) ->
+      return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
+      )
   ]
 
 
