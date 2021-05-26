@@ -10,7 +10,7 @@ module WaiSample.Client
 import           Control.Monad.State.Strict (State, evalState, get, put)
 import qualified Data.ByteString.Lazy       as BL
 import           Data.Char                  (toLower, toUpper)
-import           Data.Proxy                 (Proxy (Proxy))
+import           Data.Proxy                 (Proxy)
 import qualified Data.Text                  as T
 import           Data.Typeable              (Typeable, tyConName, typeRep,
                                              typeRepTyCon)
