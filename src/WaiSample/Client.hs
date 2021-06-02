@@ -5,22 +5,26 @@
 module WaiSample.Client
   ( declareClient
   , Backend
+  , httpConduitBackend
   ) where
 
-import           Control.Monad.State.Strict (State, evalState, get, put)
-import qualified Data.ByteString.Lazy       as BL
-import           Data.Char                  (toLower, toUpper)
-import           Data.Proxy                 (Proxy)
-import qualified Data.Text                  as T
-import           Data.Typeable              (Typeable, tyConName, typeRep,
-                                             typeRepTyCon)
-import           Language.Haskell.TH        (DecsQ, ExpQ, Q, TypeQ, appT,
-                                             clause, funD, mkName, newName,
-                                             normalB, sigD, stringE, varE, varP)
-import           Language.Haskell.TH.Syntax (Name)
-import           LiftType                   (liftTypeQ)
+import           Control.Monad.State.Strict  (State, evalState, get, put)
+import qualified Data.ByteString.Lazy.Char8  as BL
+import           Data.Char                   (toLower, toUpper)
+import           Data.Proxy                  (Proxy)
+import qualified Data.Text                   as T
+import           Data.Typeable               (Typeable, tyConName, typeRep,
+                                              typeRepTyCon)
+import           Language.Haskell.TH         (DecsQ, ExpQ, Q, TypeQ, appT,
+                                              clause, funD, mkName, newName,
+                                              normalB, sigD, stringE, varE,
+                                              varP)
+import           Language.Haskell.TH.Syntax  (Name)
+import           LiftType                    (liftTypeQ)
+import           Network.HTTP.Client.Conduit (parseUrlThrow)
+import           Network.HTTP.Simple         (getResponseBody, httpLBS)
 import           WaiSample
-import           Web.HttpApiData            (toUrlPiece)
+import           Web.HttpApiData             (toUrlPiece)
 
 
 declareClient :: String -> [Handler] -> DecsQ
@@ -136,3 +140,9 @@ infixr 1 `funcT`
 
 
 type Backend = String -> IO BL.ByteString
+
+
+httpConduitBackend :: String -> Backend
+httpConduitBackend rootUrl pathPieces = do
+  req <- parseUrlThrow $ rootUrl ++ pathPieces
+  getResponseBody <$> httpLBS req
