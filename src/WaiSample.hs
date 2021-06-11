@@ -185,7 +185,7 @@ handler = Handler
 
 
 handles :: [Handler] -> Application
-handles hdls req respond' = bracket_ (putStrLn "Allocating") (putStrLn "Cleaning") $ do
+handles hdls req respond' = bracket_ (putStrLn "Allocating") (return ()) $ do
   let foundResponds = listToMaybe $ mapMaybe (`runHandler` req) hdls
   case foundResponds of
       Just respond -> respond' =<< respond
