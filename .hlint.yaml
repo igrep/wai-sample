@@ -1,0 +1,2 @@
+- ignore: { name: 'Use const' }
+- ignore: { name: 'Use lambda-case' }
