@@ -24,11 +24,11 @@ module WaiSample
   , printRoutes
   ) where
 
+import           Control.Error.Util         (hush)
 import           Control.Exception          (bracket_)
-import           Control.Monad              (guard)
 import           Data.Aeson                 (FromJSON, ToJSON)
 import qualified Data.Aeson                 as Json
-import           Data.Bifunctor             (first)
+import qualified Data.Attoparsec.Text       as AT
 import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Foldable              (traverse_)
 import           Data.Functor               (void)
@@ -46,8 +46,6 @@ import           Network.Wai                (Application, Request, Response,
 import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData,
                                              parseUrlPiece)
 
-import qualified WaiSample.PathParser       as PathParser
-
 
 app :: Application
 app = handles routes
@@ -56,7 +54,7 @@ app = handles routes
 routes :: [Handler]
 routes =
   [ handler "index" (path "/") (\_ -> return ("index" :: T.Text))
-  , handler "aboutUs" (path "/about/us") (\_ -> return ("About IIJ" :: T.Text))
+  , handler "aboutUs" (piece "/about/us") (\_ -> return ("About IIJ" :: T.Text))
   , handler "aboutUsFinance" (path "/about/us/finance") (\_ -> return ("Financial Report 2020" :: T.Text))
   , handler "aboutFinance" (path "/about/finance") (\_ -> return ("Financial Report 2020 /" :: T.Text))
   , handler "aboutFinanceImpossible" (path "/about//finance") (\_ -> (fail "This should not be executed." :: IO T.Text))
@@ -64,6 +62,7 @@ routes =
       (path "/customer/" *> decimalPiece)
       (\i -> return $ "Customer ID: " <> T.pack (show i))
   , handler "customerIdJson"
+    -- /customer/:id.json
     (path "/customer/" *> decimalPiece <* Piece "json")
     (\i -> return . Json $ Customer
       { customerName = "Mr. " <> T.pack (show i)
@@ -119,6 +118,7 @@ instance Applicative RoutingTable where
   (<*>) = ApPath
 
 
+-- TODO: ignore the leading slash.
 piece :: T.Text -> RoutingTable T.Text
 piece = Piece
 
@@ -135,6 +135,7 @@ paramPiece :: forall a. (ToHttpApiData a, FromHttpApiData a, Typeable a) => Rout
 paramPiece = ParsedPath (Proxy :: Proxy a)
 
 
+-- TODO: Don't seprate with slash
 path :: T.Text -> RoutingTable ()
 path pathWithSlash = traverse_ piece ps
  where
@@ -148,12 +149,8 @@ pathWithSlashes pathWithSlash = traverse_ piece ps
 
 
 runRoutingTable :: RoutingTable a -> Request -> Maybe a
-runRoutingTable tbl req = do
-  -- TODO: Redirect when finding consecutive slashes.
-  -- TODO: Join pathInfo, then parse as raw path string.
-  (x, left) <- parseByRoutingTable tbl . filter (/= "") $ pathInfo req
-  guard $ null left
-  return x
+runRoutingTable tbl =
+  hush . AT.parseOnly (parserFromRoutingTable tbl <* AT.endOfInput) . T.intercalate "/" . pathInfo
 
 data Handler where
   Handler :: (Typeable a, ToFromResponseBody resObj) => String -> RoutingTable a -> (a -> IO resObj) -> Handler
@@ -203,20 +200,25 @@ runHandler (Handler _name tbl hdl ) req =
     return $ responseLBS status200 [] resBody
 
 
-parseByRoutingTable :: forall a. RoutingTable a -> [T.Text] -> Maybe (a, [T.Text])
-parseByRoutingTable (Piece p) = PathParser.run $ PathParser.piece p
-parseByRoutingTable (FmapPath f tbl) = \inp -> first f <$> parseByRoutingTable tbl inp
-parseByRoutingTable (PurePath x) = \inp -> Just (x, inp)
-parseByRoutingTable (ApPath tblF tblA) = \inp -> do
-  (f, out) <- parseByRoutingTable tblF inp
-  first f <$> parseByRoutingTable tblA out
-parseByRoutingTable (ParsedPath _) = \inp ->
-  case inp of
-    p : ps ->
-      case parseUrlPiece p :: Either T.Text a of
-          Right x -> Just (x, ps)
-          Left _  -> Nothing
-    [] -> Nothing
+parserFromRoutingTable :: forall a. RoutingTable a -> AT.Parser a
+parserFromRoutingTable (Piece p) = AT.string p
+parserFromRoutingTable (FmapPath f tbl) = f <$> parserFromRoutingTable tbl
+parserFromRoutingTable (PurePath x) = pure x
+parserFromRoutingTable (ApPath tblF tblA) = parserFromRoutingTable tblF <*> parserFromRoutingTable tblA
+parserFromRoutingTable (ParsedPath _) = do
+  s <- AT.takeWhile1 (/= '/') -- TODO: Explain why I use takeWhile1 here instead.
+  go s
+ where
+  -- OPTIMIZE: Not very efficient parsing.
+  -- Perhaps I have to give up using HttpApiData to optimize for attoparsec.
+  go :: T.Text -> AT.Parser a
+  go state =
+    case parseUrlPiece state of
+        Left e ->
+          case T.unsnoc state of
+              Just (withoutLast, _) -> go withoutLast
+              Nothing               -> fail $ T.unpack e
+        Right a -> pure a
 
 
 -- TODO: Delete extra slashes and newlines

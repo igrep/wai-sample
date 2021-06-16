@@ -29,13 +29,13 @@ library
   exposed-modules:
       WaiSample
       WaiSample.Client
-  other-modules:
-      WaiSample.PathParser
   hs-source-dirs:
       src
   build-depends:
       aeson
+    , attoparsec
     , bytestring
+    , errors
     , lift-type
     , wai
     , mtl
