@@ -53,26 +53,26 @@ app = handles routes
 
 routes :: [Handler]
 routes =
-  [ handler "index" (path "/") (\_ -> return ("index" :: T.Text))
+  [ handler "index" (piece "/") (\_ -> return ("index" :: T.Text))
   , handler "aboutUs" (piece "/about/us") (\_ -> return ("About IIJ" :: T.Text))
-  , handler "aboutUsFinance" (path "/about/us/finance") (\_ -> return ("Financial Report 2020" :: T.Text))
-  , handler "aboutFinance" (path "/about/finance") (\_ -> return ("Financial Report 2020 /" :: T.Text))
-  , handler "aboutFinanceImpossible" (path "/about//finance") (\_ -> (fail "This should not be executed." :: IO T.Text))
+  , handler "aboutUsFinance" (piece "/about/us/finance") (\_ -> return ("Financial Report 2020" :: T.Text))
+  , handler "aboutFinance" (piece "/about/finance") (\_ -> return ("Financial Report 2020 /" :: T.Text))
+  , handler "aboutFinanceImpossible" (piece "/about//finance") (\_ -> (fail "This should not be executed." :: IO T.Text))
   , handler "customerId"
-      (path "/customer/" *> decimalPiece)
+      (piece "/customer/" *> decimalPiece)
       (\i -> return $ "Customer ID: " <> T.pack (show i))
   , handler "customerIdJson"
     -- /customer/:id.json
-    (path "/customer/" *> decimalPiece <* Piece "json")
+    (piece "/customer/" *> decimalPiece <* Piece ".json")
     (\i -> return . Json $ Customer
       { customerName = "Mr. " <> T.pack (show i)
       , customerId = i
       })
   , handler "customerTransaction"
     ( do
-        path "/customer/"
+        piece "/customer/"
         cId <- decimalPiece
-        path "/transaction/"
+        piece "/transaction/"
         transactionName <- T.replicate 2 <$> paramPiece
         pure (cId, transactionName)
       )
@@ -118,9 +118,12 @@ instance Applicative RoutingTable where
   (<*>) = ApPath
 
 
--- TODO: ignore the leading slash.
 piece :: T.Text -> RoutingTable T.Text
-piece = Piece
+piece t =
+  case T.uncons t of
+      Just ('/', "")   -> Piece t
+      Just ('/', left) -> Piece left
+      _                -> Piece t
 
 
 -- piece "foo" *> piece "example" *> piece "users"
