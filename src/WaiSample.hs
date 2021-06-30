@@ -206,19 +206,10 @@ parserFromRoutingTable (FmapPath f tbl) = f <$> parserFromRoutingTable tbl
 parserFromRoutingTable (PurePath x) = pure x
 parserFromRoutingTable (ApPath tblF tblA) = parserFromRoutingTable tblF <*> parserFromRoutingTable tblA
 parserFromRoutingTable (ParsedPath _) = do
-  s <- AT.takeWhile1 (/= '/') -- TODO: Explain why I use takeWhile1 here instead.
-  go s
- where
-  -- OPTIMIZE: Not very efficient parsing.
-  -- Perhaps I have to give up using HttpApiData to optimize for attoparsec.
-  go :: T.Text -> AT.Parser a
-  go state =
-    case parseUrlPiece state of
-        Left e ->
-          case T.unsnoc state of
-              Just (withoutLast, _) -> go withoutLast
-              Nothing               -> fail $ T.unpack e
-        Right a -> pure a
+  s <- AT.takeWhile1 (/= '/') -- Avoid using takeTill/takeWhile to avoid infinite loops.
+  case parseUrlPiece s of
+    Left e  -> fail $ T.unpack e
+    Right a -> pure a
 
 
 -- TODO: Delete extra slashes and newlines
