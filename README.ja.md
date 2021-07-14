@@ -10,14 +10,13 @@ Haskellの世界では現在[Servant](https://docs.servant.dev/en/stable/)と[Ye
 
 ### [makeMistakesToLearnHaskell](https://github.com/haskell-jp/makeMistakesToLearnHaskell)の配信用サーバーとして、誰でもハックできるフレームワークにしたいから
 
-[makeMistakesToLearnHaskell](https://github.com/haskell-jp/makeMistakesToLearnHaskell)は、私がのんびり開発・執筆しているHaskell学習用アプリケーションです<small>（詳細は以前書いた「[Haskell社内勉強会とHaskell学習ツールの紹介](https://eng-blog.iij.ad.jp/archives/3467)」という記事をご覧ください）</small>。makeMistakesToLearnHaskellは、現在はコマンドラインアプリケーションとしてインストールして実行するものですが、インストールするためにはGHCとかをインストールしないといけないので、そこでハマるひとが多数。
+[makeMistakesToLearnHaskell](https://github.com/haskell-jp/makeMistakesToLearnHaskell)は、私がのんびり開発・執筆しているHaskell学習用アプリケーションです<small>（詳細は以前書いた「[Haskell社内勉強会とHaskell学習ツールの紹介](https://eng-blog.iij.ad.jp/archives/3467)」という記事をご覧ください）</small>。makeMistakesToLearnHaskellは、現在はコマンドラインアプリケーションとしてインストールして実行するものですが、インストールするためにはGHCとかをインストールしないといけないので、そこでハマるひとが多数いました。
 
-=> インストール不要なものを作ろう
-    => ユーザーが入力したコードをサーバーで実行して判定するサーバー
-=> フレームワークから作ろう
-    => 型レベルプログラミングなしで使えるフレームワーク
-        => なるべくHaskell学習したて人でも、修正できるOSSにしたい
-
+- ➡️インストール不要なものを作ろう
+    - ➡️ ユーザーが入力したコードをサーバーで実行して判定するサーバー
+- ➡️ フレームワークから作ろう
+    - ➡️ Haskell学習したて人でも修正できるOSSにしたいという理想により、簡単に理解できるフレームワークから作ることに
+        - ➡️ 型レベルプログラミングなど、GHCの高度な機能なしで使えるフレームワーク
 
 
 ## 2021年7月現在までの開発
@@ -27,7 +26,7 @@ Haskellの世界では現在[Servant](https://docs.servant.dev/en/stable/)と[Ye
 これより前は、makeMistakesToLearnHaskellの開発を配信しながら学習する、という進め方をしていましたが、ネタ切れ  
 ➡️サーバーをフレームワークから作ろう！
 
-💡makeMistakesToLearnHaskell自身も「習いたてのHaskellerでも開発できる」ことを目指しているので、勉強会向け
+💡makeMistakesToLearnHaskell自身も「習いたてのHaskellerでも開発できる」ことを目指しているので、勉強会で配信するのにも向いていた
 
 [プログラミングHaskell](https://www.lambdanote.com/products/haskell)の第13章を参考にパスをパースして、マッチしたパスに登録したアクションを起動
 
