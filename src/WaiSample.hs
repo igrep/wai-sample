@@ -209,7 +209,7 @@ parserFromRoutingTable (FmapPath f tbl) = f <$> parserFromRoutingTable tbl
 parserFromRoutingTable (PurePath x) = pure x
 parserFromRoutingTable (ApPath tblF tblA) = parserFromRoutingTable tblF <*> parserFromRoutingTable tblA
 parserFromRoutingTable (ParsedPath _) = do
-  s <- AT.takeWhile1 (/= '/') -- Avoid using takeTill/takeWhile to avoid infinite loops.
+  s <- AT.takeWhile1 (/= '/')
   case parseUrlPiece s of
     Left e  -> fail $ T.unpack e
     Right a -> pure a
