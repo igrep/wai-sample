@@ -1,0 +1,3 @@
+[submodule "http-api-data"]
+	path = http-api-data
+	url = https://github.com/igrep/http-api-data.git
