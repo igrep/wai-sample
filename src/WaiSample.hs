@@ -103,11 +103,11 @@ getRoutingTableType _ = Proxy
 
 data RoutingTable a where
   Piece :: T.Text -> RoutingTable T.Text
+  -- | '<$>'
   FmapPath :: (a -> b) -> RoutingTable a -> RoutingTable b
-  -- ^ '<$>'
   PurePath :: a -> RoutingTable a
+  -- | '<*>'
   ApPath :: RoutingTable (a -> b) -> RoutingTable a -> RoutingTable b
-  -- ^ '<*>'
   ParsedPath :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => Proxy a -> RoutingTable a
 
 instance Functor RoutingTable where
