@@ -53,24 +53,24 @@ app = handles routes
 
 routes :: [Handler]
 routes =
-  [ handler "index" (piece "/") (\_ -> return ("index" :: T.Text))
+  [ handler "index" root (\_ -> return ("index" :: T.Text))
   , handler "aboutUs" (piece "/about/us") (\_ -> return ("About IIJ" :: T.Text))
   , handler "aboutUsFinance" (piece "/about/us/finance") (\_ -> return ("Financial Report 2020" :: T.Text))
   , handler "aboutFinance" (piece "/about/finance") (\_ -> return ("Financial Report 2020 /" :: T.Text))
   , handler "aboutFinanceImpossible" (piece "/about//finance") (\_ -> (fail "This should not be executed." :: IO T.Text))
   , handler "customerId"
-      (piece "/customer/" *> decimalPiece)
+      (piece "customer/" *> decimalPiece)
       (\i -> return $ "Customer ID: " <> T.pack (show i))
   , handler "customerIdJson"
     -- /customer/:id.json
-    (piece "/customer/" *> decimalPiece <* Piece ".json")
+    (piece "customer/" *> decimalPiece <* Piece ".json")
     (\i -> return . Json $ Customer
       { customerName = "Mr. " <> T.pack (show i)
       , customerId = i
       })
   , handler "customerTransaction"
     ( do
-        piece "/customer/"
+        piece "customer/"
         cId <- decimalPiece
         piece "/transaction/"
         transactionName <- T.replicate 2 <$> paramPiece
@@ -116,6 +116,10 @@ instance Functor RoutingTable where
 instance Applicative RoutingTable where
   pure = PurePath
   (<*>) = ApPath
+
+
+root :: RoutingTable ()
+root = pure ()
 
 
 piece :: T.Text -> RoutingTable T.Text
@@ -203,16 +207,13 @@ runHandler (Handler _name tbl hdl ) req =
     return $ responseLBS status200 [] resBody
 
 
+-- TODO: 先頭のスラッシュの有無を気にするのは最初のPieceだけ？
 parserFromRoutingTable :: forall a. RoutingTable a -> AT.Parser a
 parserFromRoutingTable (Piece p) = AT.string p
 parserFromRoutingTable (FmapPath f tbl) = f <$> parserFromRoutingTable tbl
 parserFromRoutingTable (PurePath x) = pure x
 parserFromRoutingTable (ApPath tblF tblA) = parserFromRoutingTable tblF <*> parserFromRoutingTable tblA
-parserFromRoutingTable (ParsedPath _) = do
-  s <- AT.takeWhile1 (/= '/')
-  case parseUrlPiece s of
-    Left e  -> fail $ T.unpack e
-    Right a -> pure a
+parserFromRoutingTable (ParsedPath _) = parseUrlPiece
 
 
 -- TODO: Delete extra slashes and newlines
