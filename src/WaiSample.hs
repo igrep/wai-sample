@@ -8,6 +8,7 @@
 module WaiSample
   ( app
   , routes
+  , root
   , path
   , paramPiece
   , pathWithSlashes
