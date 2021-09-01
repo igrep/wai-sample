@@ -187,6 +187,7 @@ runHandler (Handler _name tbl hdl ) req =
  where
   act x = do
     resObj <- hdl x
+    -- TODO: Detect request methods, request body
     let mime = mimeType resObj
     resBody <- toResponseBody resObj
     return $ responseLBS status200 [(hContentType, mime)] resBody
