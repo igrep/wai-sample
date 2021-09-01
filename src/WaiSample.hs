@@ -23,27 +23,29 @@ module WaiSample
   , printRoutes
   ) where
 
-import           Control.Error.Util         (hush)
-import           Control.Exception          (bracket_)
-import           Data.Aeson                 (FromJSON, ToJSON)
-import qualified Data.Aeson                 as Json
-import qualified Data.Attoparsec.Text       as AT
-import qualified Data.ByteString.Char8      as B
-import qualified Data.ByteString.Lazy.Char8 as BL
-import           Data.Functor               (void)
-import           Data.Maybe                 (listToMaybe, mapMaybe)
-import           Data.Proxy                 (Proxy (Proxy))
-import qualified Data.Text                  as T
-import qualified Data.Text.Encoding         as TE
-import qualified Data.Text.IO               as TIO
-import           Data.Typeable              (Typeable)
-import           GHC.Generics               (Generic)
-import           Network.HTTP.Types.Header  (hContentType)
-import           Network.HTTP.Types.Status  (status200, status404)
-import           Network.Wai                (Application, Request, Response,
-                                             pathInfo, responseLBS)
-import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData,
-                                             parseUrlPiece)
+import           Control.Error.Util          (hush)
+import           Control.Exception           (bracket_)
+import           Data.Aeson                  (FromJSON, ToJSON)
+import qualified Data.Aeson                  as Json
+import qualified Data.Attoparsec.Text        as AT
+import qualified Data.ByteString.Char8       as B
+import qualified Data.ByteString.Lazy.Char8  as BL
+import           Data.Functor                (void)
+import           Data.Maybe                  (listToMaybe, mapMaybe)
+import           Data.Proxy                  (Proxy (Proxy))
+import qualified Data.Text                   as T
+import qualified Data.Text.Encoding          as TE
+import qualified Data.Text.IO                as TIO
+import           Data.Typeable               (Typeable)
+import           GHC.Generics                (Generic)
+import           Network.HTTP.Types.Header   (hContentType)
+import           Network.HTTP.Types.Status   (status200, status404)
+import           Network.Wai                 (Application, Request, Response,
+                                              pathInfo, responseLBS)
+import           Web.FormUrlEncoded          (FromForm, ToForm, urlDecodeAsForm)
+import           Web.HttpApiData             (FromHttpApiData, ToHttpApiData,
+                                              parseUrlPiece)
+import           Web.Internal.FormUrlEncoded (urlEncodeAsForm)
 
 
 app :: Application
@@ -143,23 +145,28 @@ data Handler where
 type MimeType = B.ByteString
 
 class Typeable resObj => ToFromResponseBody resObj where
-  toResponseBody   :: resObj -> IO BL.ByteString
-  fromResponseBody :: BL.ByteString -> IO resObj
+  toResponseBody   :: MimeType -> resObj -> IO BL.ByteString
+  fromResponseBody :: MimeType -> BL.ByteString -> IO resObj
   mimeType         :: resObj -> MimeType
-  -- TODO: How to express multiple mime types of a type
-  -- TODO: Add Negotiation with Content-Type
   -- TODO: Add other header, status code etc.
 
 newtype Json a = Json { unJson :: a }
 
 instance (ToJSON resObj, FromJSON resObj, Typeable resObj) => ToFromResponseBody (Json resObj) where
-  toResponseBody = return . Json.encode . unJson
-  fromResponseBody = either fail (return . Json) . Json.eitherDecode'
+  toResponseBody _   = return . Json.encode . unJson
+  fromResponseBody _ = either fail (return . Json) . Json.eitherDecode'
   mimeType _ = "application/json"
 
+newtype FormUrlEncoded a = FormUrlEncoded { unFormUrlEncode :: a }
+
+instance (ToForm resObj, FromForm resObj, Typeable resObj) => ToFromResponseBody (FormUrlEncoded resObj) where
+  toResponseBody _   = return . urlEncodeAsForm . unFormUrlEncode
+  fromResponseBody _ = either (fail . T.unpack) (return . FormUrlEncoded) . urlDecodeAsForm
+  mimeType _ = "application/x-www-form-urlencoded"
+
 instance ToFromResponseBody T.Text where
-  toResponseBody = return . BL.fromStrict . TE.encodeUtf8
-  fromResponseBody = return . TE.decodeUtf8 . BL.toStrict
+  toResponseBody _   = return . BL.fromStrict . TE.encodeUtf8
+  fromResponseBody _ = return . TE.decodeUtf8 . BL.toStrict
   mimeType _ = "text/plain;charset=UTF-8"
 
 
