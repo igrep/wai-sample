@@ -37,6 +37,7 @@ library
     , bytestring
     , errors
     , lift-type
+    , http-media
     , wai
     , mtl
     , http-api-data
