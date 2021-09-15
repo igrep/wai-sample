@@ -173,7 +173,7 @@ instance ToFromResponseBody T.Text where
   contentTypeCandidates _ = ["text/plain;charset=UTF-8"]
 
 
-getResponseObjectType :: (Typeable a, Typeable resObj) => (a -> IO resObj) -> Proxy resObj
+getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
 getResponseObjectType _ = Proxy
 
 
