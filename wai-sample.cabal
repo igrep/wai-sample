@@ -35,6 +35,7 @@ library
       aeson
     , attoparsec
     , bytestring
+    , case-insensitive
     , errors
     , lift-type
     , http-media
@@ -43,6 +44,7 @@ library
     , http-api-data
     , http-types
     , http-conduit
+    , safe
     , template-haskell
 
 executable wai-sample-exe

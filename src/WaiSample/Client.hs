@@ -9,7 +9,9 @@ module WaiSample.Client
   ) where
 
 import           Control.Monad.State.Strict  (State, evalState, get, put)
+import qualified Data.ByteString.Char8       as B
 import qualified Data.ByteString.Lazy.Char8  as BL
+import qualified Data.CaseInsensitive        as CI
 import           Data.Char                   (toLower, toUpper)
 import           Data.Proxy                  (Proxy)
 import qualified Data.Text                   as T
@@ -22,7 +24,9 @@ import           Language.Haskell.TH         (DecsQ, ExpQ, Q, TypeQ, appT,
 import           Language.Haskell.TH.Syntax  (Name)
 import           LiftType                    (liftTypeQ)
 import           Network.HTTP.Client.Conduit (parseUrlThrow)
-import           Network.HTTP.Simple         (getResponseBody, httpLBS)
+import           Network.HTTP.Simple         (Response, getResponseBody,
+                                              getResponseHeader, httpLBS)
+import           Safe                        (headDef, headNote)
 import           WaiSample
 import           Web.HttpApiData             (toUrlPiece)
 
@@ -38,13 +42,18 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQRtn tbl
 
     let bd = mkName "bd"
+        msg = "No default MIME type configured for " ++ show typeRtn ++ "."
+        defaultMimeType = B.unpack . headNote msg $ contentTypeCandidates typeRtn
     moreArgs <- argumentNamesFromRoutingTable tbl
     let allArgs = varP bd : map varP moreArgs
         p = pathBuilderFromRoutingTable moreArgs tbl
         implE = [e|
             do
-              resBody <- $(varE bd) $(p)
-              fromResponseBody resBody
+              res <- $(varE bd) $(p)
+              let headerName = CI.mk $ B.pack "Content-Type"
+                  contentTypes = getResponseHeader headerName res
+                  contentType = headDef (B.pack defaultMimeType) contentTypes
+              fromResponseBody contentType $ getResponseBody res
           |]
     def <- funD
       funName
@@ -139,10 +148,10 @@ funcT a b = [t| (->) |] `appT` a `appT` b
 infixr 1 `funcT`
 
 
-type Backend = String -> IO BL.ByteString
+type Backend = String -> IO (Response BL.ByteString)
 
 
 httpConduitBackend :: String -> Backend
 httpConduitBackend rootUrl pathPieces = do
   req <- parseUrlThrow $ rootUrl ++ pathPieces
-  getResponseBody <$> httpLBS req
+  httpLBS req
