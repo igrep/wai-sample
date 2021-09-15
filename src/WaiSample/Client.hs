@@ -111,7 +111,7 @@ pathBuilderFromRoutingTable qns = (`evalState` qns) . go
   go (ApPath tblF tblA) = do
     eq0 <- go tblF
     eq1 <- go tblA
-    return [e| $(eq0) ++ "/" ++ $(eq1) |]
+    return [e| $(eq0) ++ $(eq1) |]
   go (ParsedPath _proxy) = do
     arg0 <- popArgs
     return [e| T.unpack $ toUrlPiece $(varE arg0) |]
