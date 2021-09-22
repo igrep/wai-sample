@@ -13,6 +13,7 @@ import qualified Data.ByteString.Char8       as B
 import qualified Data.ByteString.Lazy.Char8  as BL
 import qualified Data.CaseInsensitive        as CI
 import           Data.Char                   (toLower, toUpper)
+import qualified Data.List.NonEmpty          as NE
 import           Data.Proxy                  (Proxy)
 import qualified Data.Text                   as T
 import           Data.Typeable               (Typeable, tyConName, typeRep,
@@ -24,9 +25,10 @@ import           Language.Haskell.TH         (DecsQ, ExpQ, Q, TypeQ, appT,
 import           Language.Haskell.TH.Syntax  (Name)
 import           LiftType                    (liftTypeQ)
 import           Network.HTTP.Client.Conduit (parseUrlThrow)
+import           Network.HTTP.Media          (parseAccept)
 import           Network.HTTP.Simple         (Response, getResponseBody,
                                               getResponseHeader, httpLBS)
-import           Safe                        (headDef, headNote)
+import           Safe                        (headDef)
 import           WaiSample
 import           Web.HttpApiData             (toUrlPiece)
 
@@ -42,8 +44,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQRtn tbl
 
     let bd = mkName "bd"
-        msg = "No default MIME type configured for " ++ show typeRtn ++ "."
-        defaultMimeType = B.unpack . headNote msg $ contentTypeCandidates typeRtn
+        defaultMimeType = show . NE.head $ contentTypeCandidates typeRtn
     moreArgs <- argumentNamesFromRoutingTable tbl
     let allArgs = varP bd : map varP moreArgs
         p = pathBuilderFromRoutingTable moreArgs tbl
@@ -52,7 +53,12 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
               res <- $(varE bd) $(p)
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypes = getResponseHeader headerName res
-                  contentType = headDef (B.pack defaultMimeType) contentTypes
+                  returnedContentType = headDef (B.pack defaultMimeType) contentTypes
+                  mContentType = parseAccept returnedContentType
+              contentType <- maybe
+                (fail $ "Invalid Content-Type returned from the server: " ++ show returnedContentType)
+                return
+                mContentType
               fromResponseBody contentType $ getResponseBody res
           |]
     def <- funD

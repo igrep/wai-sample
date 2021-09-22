@@ -28,10 +28,11 @@ import           Control.Exception           (bracket_)
 import           Data.Aeson                  (FromJSON, ToJSON)
 import qualified Data.Aeson                  as Json
 import qualified Data.Attoparsec.Text        as AT
-import qualified Data.ByteString.Char8       as B
 import qualified Data.ByteString.Lazy.Char8  as BL
 import           Data.Functor                (void)
 import qualified Data.List                   as L
+import           Data.List.NonEmpty          (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty          as NE
 import           Data.Maybe                  (fromMaybe, listToMaybe, mapMaybe)
 import           Data.Proxy                  (Proxy (Proxy))
 import qualified Data.Text                   as T
@@ -39,7 +40,8 @@ import qualified Data.Text.Encoding          as TE
 import qualified Data.Text.IO                as TIO
 import           Data.Typeable               (Typeable)
 import           GHC.Generics                (Generic)
-import           Network.HTTP.Media          (matchAccept)
+import           Network.HTTP.Media          (MediaType, matchAccept,
+                                              renderHeader, (//), (/:))
 import           Network.HTTP.Types.Header   (hContentType)
 import           Network.HTTP.Types.Status   (status200, status404, status406)
 import           Network.Wai                 (Application,
@@ -145,12 +147,11 @@ runRoutingTable tbl =
 data Handler where
   Handler :: (Typeable a, ToFromResponseBody resObj) => String -> RoutingTable a -> (a -> IO resObj) -> Handler
 
-type MimeType = B.ByteString
-
 class Typeable resObj => ToFromResponseBody resObj where
-  toResponseBody        :: MimeType -> resObj -> IO BL.ByteString
-  fromResponseBody      :: MimeType -> BL.ByteString -> IO resObj
-  contentTypeCandidates :: Proxy resObj -> [MimeType]
+  toResponseBody        :: MediaType -> resObj -> IO BL.ByteString
+  fromResponseBody      :: MediaType -> BL.ByteString -> IO resObj
+  contentTypeCandidates :: Proxy resObj -> NE.NonEmpty MediaType
+
   -- TODO: Add other header, status code etc.
 
 newtype Json a = Json { unJson :: a }
@@ -158,19 +159,19 @@ newtype Json a = Json { unJson :: a }
 instance (ToJSON resObj, FromJSON resObj, Typeable resObj) => ToFromResponseBody (Json resObj) where
   toResponseBody _        = return . Json.encode . unJson
   fromResponseBody _      = either fail (return . Json) . Json.eitherDecode'
-  contentTypeCandidates _ = ["application/json"]
+  contentTypeCandidates _ = "application" // "json" :| []
 
 newtype FormUrlEncoded a = FormUrlEncoded { unFormUrlEncode :: a }
 
 instance (ToForm resObj, FromForm resObj, Typeable resObj) => ToFromResponseBody (FormUrlEncoded resObj) where
   toResponseBody _        = return . urlEncodeAsForm . unFormUrlEncode
   fromResponseBody _      = either (fail . T.unpack) (return . FormUrlEncoded) . urlDecodeAsForm
-  contentTypeCandidates _ = ["application/x-www-form-urlencoded"]
+  contentTypeCandidates _ = "application" // "x-www-form-urlencoded" :| []
 
 instance ToFromResponseBody T.Text where
   toResponseBody _        = return . BL.fromStrict . TE.encodeUtf8
   fromResponseBody _      = return . TE.decodeUtf8 . BL.toStrict
-  contentTypeCandidates _ = ["text/plain;charset=UTF-8"]
+  contentTypeCandidates _ = "text" // "plain" /: ("charset", "UTF-8") :| []
 
 
 getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
@@ -196,12 +197,12 @@ runHandler (Handler _name tbl hdl) req =
   act <$> runRoutingTable tbl req
  where
   act x = do
-    let mMime = matchAccept (contentTypeCandidates (typeOfResponse hdl)) acceptHeader
+    let mMime = matchAccept (NE.toList (contentTypeCandidates (typeOfResponse hdl))) acceptHeader
     case mMime of
         Just mime -> do
           resObj <- hdl x -- TODO: Maybe pass MIME type here to optimize building response bodies.
           resBody <- toResponseBody mime resObj
-          return $ responseLBS status200 [(hContentType, mime)] resBody
+          return $ responseLBS status200 [(hContentType, renderHeader mime)] resBody
         Nothing ->
           return $ responseLBS status406 [(hContentType, "text/plain; charset=UTF-8")] "406 Not Acceptable"
 
