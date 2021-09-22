@@ -131,6 +131,7 @@ root = pure ()
 path :: T.Text -> RoutingTable T.Text
 path = LiteralPath
 
+
 -- :id of /for/example/users/:id
 decimalPiece :: RoutingTable Integer
 decimalPiece = ParsedPath Proxy
@@ -143,6 +144,7 @@ paramPiece = ParsedPath (Proxy :: Proxy a)
 runRoutingTable :: RoutingTable a -> Request -> Maybe a
 runRoutingTable tbl =
   hush . AT.parseOnly (parserFromRoutingTable tbl <* AT.endOfInput) . T.intercalate "/" . pathInfo
+
 
 data Handler where
   Handler :: (Typeable a, ToFromResponseBody resObj) => String -> RoutingTable a -> (a -> IO resObj) -> Handler
