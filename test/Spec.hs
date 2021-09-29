@@ -1,2 +1,15 @@
+{-# LANGUAGE OverloadedStrings #-}
+
+import           Data.ByteString.Char8 ()
+import           Network.Wai.Test
+import           Test.HUnit
+
+import           WaiSample
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = runTestTTAndExit $ TestList
+  [ TestLabel "sampleApp" . TestCase . (`runSession` sampleApp) $ do
+      let req = defaultRequest `setPath` "/"
+      res <- request req
+      assertStatus 200 res
+  ]
