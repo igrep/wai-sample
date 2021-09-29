@@ -6,8 +6,8 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 
 module WaiSample
-  ( app
-  , routes
+  ( sampleApp
+  , sampleRoutes
   , root
   , path
   , paramPiece
@@ -53,12 +53,12 @@ import           Web.HttpApiData             (FromHttpApiData, ToHttpApiData,
 import           Web.Internal.FormUrlEncoded (urlEncodeAsForm)
 
 
-app :: Application
-app = handles routes
+sampleApp :: Application
+sampleApp = handles sampleRoutes
 
 
-routes :: [Handler]
-routes =
+sampleRoutes :: [Handler]
+sampleRoutes =
   [ handler "index" root (\_ -> return ("index" :: T.Text))
   , handler "aboutUs" (path "about/us") (\_ -> return ("About IIJ" :: T.Text))
   , handler "aboutUsFinance" (path "about/us/finance") (\_ -> return ("Financial Report 2020" :: T.Text))
@@ -100,7 +100,7 @@ instance FromJSON Customer
 
 
 printRoutes :: IO ()
-printRoutes = TIO.putStrLn $ showRoutes routes
+printRoutes = TIO.putStrLn $ showRoutes sampleRoutes
 
 
 getRoutingTableType :: RoutingTable a -> Proxy a
