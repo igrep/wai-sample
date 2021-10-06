@@ -2,7 +2,7 @@ module Main where
 
 import           Network.Wai.Handler.Warp (runEnv)
 
-import           WaiSample (app)
+import           WaiSample (sampleApp)
 
 main :: IO ()
-main = runEnv 8080 app
+main = runEnv 8080 sampleApp

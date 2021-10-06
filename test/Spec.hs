@@ -9,6 +9,7 @@ import           Test.Syd.Wai.Matcher  (bodyEquals, matchAny)
 
 import           WaiSample
 
+
 main :: IO ()
 main = sydTest . waiClientSpec sampleApp $
   describe "sampleApp" $ do
