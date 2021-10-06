@@ -61,9 +61,10 @@ sampleRoutes :: [Handler]
 sampleRoutes =
   [ handler "index" root (\_ -> return ("index" :: T.Text))
   , handler "aboutUs" (path "about/us") (\_ -> return ("About IIJ" :: T.Text))
-  , handler "aboutUsFinance" (path "about/us/finance") (\_ -> return ("Financial Report 2020" :: T.Text))
+  , handler "aboutUsFinance" (path "about/us/finance") (\_ -> return ("Financial Report 2021" :: T.Text))
   , handler "aboutFinance" (path "about/finance") (\_ -> return ("Financial Report 2020 /" :: T.Text))
-  , handler "aboutFinanceImpossible" (path "/about/finance/impossible") (\_ -> (fail "This should not be executed." :: IO T.Text))
+  -- TODO: Drop the initial slash?
+  , handler "aboutFinanceImpossible" (path "/about/finance/impossible") (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
   , handler "customerId"
       (path "customer/" *> decimalPiece)
       (\i -> return $ "Customer ID: " <> T.pack (show i))

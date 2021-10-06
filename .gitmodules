@@ -1,3 +1,6 @@
 [submodule "http-api-data"]
 	path = http-api-data
 	url = https://github.com/igrep/http-api-data.git
+[submodule "sydtest"]
+	path = sydtest
+	url = https://github.com/igrep/sydtest.git
