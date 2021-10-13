@@ -1,19 +1,25 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import           Data.ByteString.Char8 ()
-import qualified Data.ByteString.Lazy  as BSL
-import           Test.Syd              (describe, it, sydTest)
-import           Test.Syd.Wai          (ResponseMatcher (..), get,
-                                        shouldRespondWith, waiClientSpec)
-import           Test.Syd.Wai.Matcher  (bodyEquals, matchAny)
+import           Control.Monad.Reader      (ReaderT, mapReaderT)
+import           Control.Monad.State.Lazy  (evalStateT)
+import           Data.ByteString.Char8     ()
+import qualified Data.ByteString.Lazy      as BSL
+import qualified Network.Wai               as Wai
+import           Network.Wai.Test          (Session)
+import           Network.Wai.Test.Internal (initState)
+import           Test.Syd                  (around, describe, it, sydTest)
+import           Test.Syd.Wai              (ResponseMatcher (..), get,
+                                            shouldRespondWith, waiClientSpec)
+import           Test.Syd.Wai.Matcher      (bodyEquals, matchAny)
 
 import           WaiSample
 
+-- TODO: ReaderT・StateT
 
 main :: IO ()
-main = sydTest . waiClientSpec sampleApp $
-  describe "sampleApp" $ do
-    it "/ is available" $ do
+main = sydTest .
+  describe "sampleApp" . around (withWaiApp sampleApp) $ do
+    it "/ is available" . runStateTClientState $ do
       let expected = ResponseMatcher
             { matchStatus = 200
             , matchHeaders = []
@@ -21,7 +27,7 @@ main = sydTest . waiClientSpec sampleApp $
             }
       get "/" `shouldRespondWith` expected
 
-    it "/about/us is available" $ do
+    it "/about/us is available" . runStateTClientState $ do
       let expected = ResponseMatcher
             { matchStatus = 200
             , matchHeaders = []
@@ -29,7 +35,7 @@ main = sydTest . waiClientSpec sampleApp $
             }
       get "/about/us" `shouldRespondWith` expected
 
-    it "/about/us/finance is available" $ do
+    it "/about/us/finance is available" . runStateTClientState $ do
       let expected = ResponseMatcher
             { matchStatus = 200
             , matchHeaders = []
@@ -37,7 +43,7 @@ main = sydTest . waiClientSpec sampleApp $
             }
       get "/about/us/finance" `shouldRespondWith` expected
 
-    it "/about/finance/impossible isn't accessible" $ do
+    it "/about/finance/impossible isn't accessible" . runStateTClientState $ do
       let expected = ResponseMatcher
             { matchStatus = 404
             , matchHeaders = []
@@ -45,7 +51,7 @@ main = sydTest . waiClientSpec sampleApp $
             }
       get "/about/finance/impossible" `shouldRespondWith` expected
 
-    it "/customer/:customerId is available" $ do
+    it "/customer/:customerId is available" . runStateTClientState $ do
       let customerId = "1752"
           expected = ResponseMatcher
             { matchStatus = 200
@@ -54,7 +60,7 @@ main = sydTest . waiClientSpec sampleApp $
             }
       get ("/customer/" <> BSL.toStrict customerId) `shouldRespondWith` expected
 
-    it "/customer/:customerId.json returns a JSON" $ do
+    it "/customer/:customerId.json returns a JSON" . runStateTClientState $ do
       let customerId = "5817"
           expected = ResponseMatcher
             { matchStatus = 200
@@ -66,3 +72,11 @@ main = sydTest . waiClientSpec sampleApp $
                   <> "}"
             }
       get ("/customer/" <> BSL.toStrict customerId <> ".json") `shouldRespondWith` expected
+
+
+withWaiApp :: Wai.Application -> (Wai.Application -> IO ()) -> IO ()
+withWaiApp app body = body app
+
+
+runStateTClientState :: Session () -> ReaderT Wai.Application IO ()
+runStateTClientState = mapReaderT (`evalStateT` initState)
