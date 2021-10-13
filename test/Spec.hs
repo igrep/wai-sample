@@ -14,8 +14,6 @@ import           Test.Syd.Wai.Matcher      (bodyEquals, matchAny)
 
 import           WaiSample
 
--- TODO: ReaderT・StateT
-
 main :: IO ()
 main = sydTest .
   describe "sampleApp" . around (withWaiApp sampleApp) $ do
