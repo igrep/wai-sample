@@ -42,9 +42,8 @@ packages:
 extra-deps:
 - lift-type-0.1.0.1@sha256:6e38e49bf086fd2203346417d96ad2e6c300d8d8f41d222780abdccc7a4e451b,1106
 - ./http-api-data
-- git: https://github.com/igrep/sydtest.git
-  subdirs: [sydtest, sydtest-wai]
-  commit: a510699e246c765e9effc57b454c5337932fed96
+- sydtest/sydtest
+- sydtest/sydtest-wai
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

@@ -11,32 +11,6 @@ packages:
       sha256: 9de4bdc6ce32b78c28b4bce75b5b2e488bf0f875a136ae269a02df804eb94a1a
   original:
     hackage: lift-type-0.1.0.1@sha256:6e38e49bf086fd2203346417d96ad2e6c300d8d8f41d222780abdccc7a4e451b,1106
-- completed:
-    subdir: sydtest
-    name: sydtest
-    version: 0.4.0.0
-    git: https://github.com/igrep/sydtest.git
-    pantry-tree:
-      size: 3056
-      sha256: f2853dd9e08d947c2069c18e6d7b8c7a9106d0309660bf873b17ec2a3d997898
-    commit: a510699e246c765e9effc57b454c5337932fed96
-  original:
-    subdir: sydtest
-    git: https://github.com/igrep/sydtest.git
-    commit: a510699e246c765e9effc57b454c5337932fed96
-- completed:
-    subdir: sydtest-wai
-    name: sydtest-wai
-    version: 0.2.0.0
-    git: https://github.com/igrep/sydtest.git
-    pantry-tree:
-      size: 776
-      sha256: 39cccfa2132970e2b56ca728810f39a477928c06f0f79be78c5a659b1a3aa607
-    commit: a510699e246c765e9effc57b454c5337932fed96
-  original:
-    subdir: sydtest-wai
-    git: https://github.com/igrep/sydtest.git
-    commit: a510699e246c765e9effc57b454c5337932fed96
 snapshots:
 - completed:
     size: 586041
