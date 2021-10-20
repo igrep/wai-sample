@@ -32,7 +32,7 @@ library
   hs-source-dirs:
       src
   build-depends:
-      aeson
+      aeson >= 2.0
     , attoparsec
     , bytestring
     , case-insensitive

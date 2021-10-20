@@ -4,3 +4,6 @@
 [submodule "sydtest"]
 	path = sydtest
 	url = https://github.com/igrep/sydtest.git
+[submodule "yamlparse-applicative"]
+	path = yamlparse-applicative
+	url = https://github.com/igrep/yamlparse-applicative.git
