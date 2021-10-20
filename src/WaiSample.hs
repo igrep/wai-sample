@@ -186,13 +186,13 @@ handler = Handler
 
 
 handles :: [Handler] -> Application
-handles hdls req respond' = bracket_ (putStrLn "Allocating") (return ()) $ do
+handles hdls req respond' = bracket_ (return ()) (return ()) $ do
   let foundResponds = listToMaybe $ mapMaybe (`runHandler` req) hdls
   case foundResponds of
       Just respond -> respond' =<< respond
       Nothing      -> respond' handle404
  where
-  handle404 = responseLBS status404 [] "404 Not found."
+  handle404 = responseLBS status404 [(hContentType, "text/plain;charset=UTF-8")] "404 Not found."
 
 
 runHandler :: Handler -> Request -> Maybe (IO Response)
@@ -207,7 +207,7 @@ runHandler (Handler _name tbl hdl) req =
           resBody <- toResponseBody mime resObj
           return $ responseLBS status200 [(hContentType, renderHeader mime)] resBody
         Nothing ->
-          return $ responseLBS status406 [(hContentType, "text/plain; charset=UTF-8")] "406 Not Acceptable"
+          return $ responseLBS status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable"
 
   acceptHeader = fromMaybe "*/*" . L.lookup "Accept" $ requestHeaders req
 

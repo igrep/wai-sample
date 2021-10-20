@@ -4,72 +4,83 @@ import           Control.Monad.Reader      (ReaderT, mapReaderT)
 import           Control.Monad.State.Lazy  (evalStateT)
 import           Data.ByteString.Char8     ()
 import qualified Data.ByteString.Lazy      as BSL
+import           Network.HTTP.Types        (Header)
 import qualified Network.Wai               as Wai
-import           Network.Wai.Test          (Session)
+import qualified Network.Wai.Internal      as WaiI
+import           Network.Wai.Test          (Session, assertBody, assertHeader,
+                                            assertStatus, defaultRequest,
+                                            request, setPath)
 import           Network.Wai.Test.Internal (initState)
 import           Test.Syd                  (around, describe, it, sydTest)
-import           Test.Syd.Wai              (ResponseMatcher (..), get,
-                                            shouldRespondWith, waiClientSpec)
-import           Test.Syd.Wai.Matcher      (bodyEquals, matchAny)
-
 import           WaiSample
+
 
 main :: IO ()
 main = sydTest .
   describe "sampleApp" . around (withWaiApp sampleApp) $ do
     it "/ is available" . runStateTClientState $ do
-      let expected = ResponseMatcher
-            { matchStatus = 200
-            , matchHeaders = []
-            , matchBody = bodyEquals "index"
-            }
-      get "/" `shouldRespondWith` expected
+      let req = defaultRequest `setPath` "/"
+      res <- request req
+      assertStatus 200 res
+      assertBody "index" res
+      assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
     it "/about/us is available" . runStateTClientState $ do
-      let expected = ResponseMatcher
-            { matchStatus = 200
-            , matchHeaders = []
-            , matchBody = bodyEquals "About IIJ"
-            }
-      get "/about/us" `shouldRespondWith` expected
+      let req = defaultRequest `setPath` "/about/us"
+      res <- request req
+      assertStatus 200 res
+      assertBody "About IIJ" res
+      assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
     it "/about/us/finance is available" . runStateTClientState $ do
-      let expected = ResponseMatcher
-            { matchStatus = 200
-            , matchHeaders = []
-            , matchBody = bodyEquals "Financial Report 2021"
-            }
-      get "/about/us/finance" `shouldRespondWith` expected
+      let req = defaultRequest `setPath` "/about/us/finance"
+      res <- request req
+      assertStatus 200 res
+      assertBody "Financial Report 2021" res
+      assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
     it "/about/finance/impossible isn't accessible" . runStateTClientState $ do
-      let expected = ResponseMatcher
-            { matchStatus = 404
-            , matchHeaders = []
-            , matchBody = matchAny
-            }
-      get "/about/finance/impossible" `shouldRespondWith` expected
+      let req = defaultRequest `setPath` "/about/finance/impossible"
+      res <- request req
+      assertStatus 404 res
+      assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
     it "/customer/:customerId is available" . runStateTClientState $ do
       let customerId = "1752"
-          expected = ResponseMatcher
-            { matchStatus = 200
-            , matchHeaders = []
-            , matchBody = bodyEquals $ "Customer ID: " <> customerId
-            }
-      get ("/customer/" <> BSL.toStrict customerId) `shouldRespondWith` expected
+          req = defaultRequest `setPath` ("/customer/" <> BSL.toStrict customerId)
+      res <- request req
+      assertStatus 200 res
+      assertBody ("Customer ID: " <> customerId) res
+      assertHeader "Content-Type" "text/plain;charset=UTF-8" res
+
+    it "/customer/:customerId returns 406 given unknown Accept Content-Type" . runStateTClientState $ do
+      let customerId = "1752"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict customerId)
+                  `addHeader` ("Accept", "application/json")
+      res <- request req
+      assertStatus 406 res
+      assertBody "406 Not Acceptable" res
+      assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
     it "/customer/:customerId.json returns a JSON" . runStateTClientState $ do
-      let customerId = "5817"
-          expected = ResponseMatcher
-            { matchStatus = 200
-            , matchHeaders = []
-            , matchBody = bodyEquals $
-                "{\"customerName\":\"Mr. " <> customerId <> "\","
-                  <> "\"customerId\":"
-                  <> customerId
-                  <> "}"
-            }
-      get ("/customer/" <> BSL.toStrict customerId <> ".json") `shouldRespondWith` expected
+      let customerId = "1752"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict customerId <> ".json")
+                  `addHeader` ("Accept", "text/html,*/*")
+      res <- request req
+      assertStatus 200 res
+      let expectedBody =
+            "{\"customerName\":\"Mr. " <> customerId <> "\","
+              <> "\"customerId\":"
+              <> customerId
+              <> "}"
+      assertBody expectedBody res
+      assertHeader "Content-Type" "application/json" res
+
+
+addHeader :: Wai.Request -> Header -> Wai.Request
+addHeader r h = r { WaiI.requestHeaders = h : WaiI.requestHeaders r }
 
 
 withWaiApp :: Wai.Application -> (Wai.Application -> IO ()) -> IO ()

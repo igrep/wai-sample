@@ -78,8 +78,8 @@ test-suite wai-sample-test
   build-depends:
       wai-sample
     , bytestring
+    , http-types
     , mtl
     , sydtest
-    , sydtest-wai
     , wai
     , wai-extra
