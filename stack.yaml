@@ -47,7 +47,7 @@ extra-deps:
 - hashable-1.3.4.1@sha256:838e92f704bfdafc33246ac5deb8d71e79a21a4c57079b2d0b9a6a5e7e48f480,4193
 - yaml-0.11.7.0
 - ./http-api-data
-- yamlparse-applicative/yamlparse-applicative
+- yamlparse-applicative-0.2.0.1
 - sydtest/sydtest
 - sydtest/sydtest-wai
 
