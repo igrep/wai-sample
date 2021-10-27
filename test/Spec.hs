@@ -45,19 +45,36 @@ main = sydTest .
       assertStatus 404 res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
-    it "/customer/:customerId is available" . runStateTClientState $ do
+    it "/customer/:customerId returns text/plain given text/plain as the Accept header" . runStateTClientState $ do
       let customerId = "1752"
-          req = defaultRequest `setPath` ("/customer/" <> BSL.toStrict customerId)
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict customerId)
+                  `addHeader` ("Accept", "text/plain")
       res <- request req
       assertStatus 200 res
       assertBody ("Customer ID: " <> customerId) res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
-    it "/customer/:customerId returns 406 given unknown Accept Content-Type" . runStateTClientState $ do
+    it "/customer/:customerId returns application/json given */* as the Accept header" . runStateTClientState $ do
       let customerId = "1752"
           req = defaultRequest
                   `setPath` ("/customer/" <> BSL.toStrict customerId)
-                  `addHeader` ("Accept", "application/json")
+                  `addHeader` ("Accept", "*/*")
+      res <- request req
+      assertStatus 200 res
+      let expectedBody =
+            "{\"customerName\":\"Mr. " <> customerId <> "\","
+              <> "\"customerId\":"
+              <> customerId
+              <> "}"
+      assertBody expectedBody res
+      assertHeader "Content-Type" "application/json" res
+
+    it "/customer/:customerId returns 406 given an unknown Accept header" . runStateTClientState $ do
+      let customerId = "1752"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict customerId)
+                  `addHeader` ("Accept", "image/*")
       res <- request req
       assertStatus 406 res
       assertBody "406 Not Acceptable" res

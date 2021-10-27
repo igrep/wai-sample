@@ -46,6 +46,7 @@ library
     , http-conduit
     , safe
     , template-haskell
+    , warp
 
 executable wai-sample-exe
   import: common

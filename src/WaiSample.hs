@@ -7,6 +7,7 @@
 
 module WaiSample
   ( sampleApp
+  , runSampleApp
   , sampleRoutes
   , root
   , path
@@ -29,6 +30,7 @@ import           Data.Aeson                  (FromJSON, ToJSON)
 import qualified Data.Aeson                  as Json
 import qualified Data.Attoparsec.Text        as AT
 import qualified Data.ByteString.Lazy.Char8  as BL
+import qualified Data.Foldable               as F
 import           Data.Functor                (void)
 import qualified Data.List                   as L
 import           Data.List.NonEmpty          (NonEmpty ((:|)))
@@ -47,6 +49,7 @@ import           Network.HTTP.Types.Status   (status200, status404, status406)
 import           Network.Wai                 (Application,
                                               Request (requestHeaders),
                                               Response, pathInfo, responseLBS)
+import           Network.Wai.Handler.Warp    (runEnv)
 import           Web.FormUrlEncoded          (FromForm, ToForm, urlDecodeAsForm)
 import           Web.HttpApiData             (FromHttpApiData, ToHttpApiData,
                                               parseUrlPiece)
@@ -55,6 +58,10 @@ import           Web.Internal.FormUrlEncoded (urlEncodeAsForm)
 
 sampleApp :: Application
 sampleApp = handles sampleRoutes
+
+
+runSampleApp :: IO ()
+runSampleApp = runEnv 8020 sampleApp
 
 
 sampleRoutes :: [Handler]
@@ -67,14 +74,11 @@ sampleRoutes =
   , handler "aboutFinanceImpossible" (path "/about/finance/impossible") (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
   , handler "customerId"
       (path "customer/" *> decimalPiece)
-      (\i -> return $ "Customer ID: " <> T.pack (show i))
+      (return . customerOfId)
   , handler "customerIdJson"
     -- /customer/:id.json
     (path "customer/" *> decimalPiece <* path ".json")
-    (\i -> return . Json $ Customer
-      { customerName = "Mr. " <> T.pack (show i)
-      , customerId = i
-      })
+    (return . customerJsonOfId)
   , handler "customerTransaction"
     ( do
         path "customer/"
@@ -87,6 +91,14 @@ sampleRoutes =
       return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
       )
   ]
+ where
+  customerOfId i =
+    customerJsonOfId i :<|> ("Customer ID: " <> T.pack (show i))
+  customerJsonOfId i =
+    Json $ Customer
+      { customerName = "Mr. " <> T.pack (show i)
+      , customerId = i
+      }
 
 
 data Customer = Customer
@@ -175,6 +187,24 @@ instance ToFromResponseBody T.Text where
   toResponseBody _        = return . BL.fromStrict . TE.encodeUtf8
   fromResponseBody _      = return . TE.decodeUtf8 . BL.toStrict
   contentTypeCandidates _ = "text" // "plain" /: ("charset", "UTF-8") :| []
+
+
+-- TODO: FIXME: more efficient way
+data ChooseMediaType a b = a :<|> b
+
+instance (ToFromResponseBody a, ToFromResponseBody b) => ToFromResponseBody (ChooseMediaType a b) where
+  toResponseBody mediaType (a :<|> b)
+    | mediaType `F.elem` contentTypeCandidates (Proxy :: Proxy a) = toResponseBody mediaType a
+    | mediaType `F.elem` contentTypeCandidates (Proxy :: Proxy b) = toResponseBody mediaType b
+    | otherwise = fail "No suitable media type"
+
+  -- TODO: FIXME: 無限ループが起こる
+  fromResponseBody mediaType bs
+    | mediaType `F.elem` contentTypeCandidates (Proxy :: Proxy a) = fromResponseBody mediaType bs
+    | mediaType `F.elem` contentTypeCandidates (Proxy :: Proxy b) = fromResponseBody mediaType bs
+    | otherwise = fail "No suitable media type"
+
+  contentTypeCandidates _ = contentTypeCandidates (Proxy :: Proxy a) <> contentTypeCandidates (Proxy :: Proxy b)
 
 
 getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
