@@ -37,14 +37,14 @@ declareClient :: String -> [Handler] -> DecsQ
 declareClient prefix = fmap concat . mapM declareEndpointFunction
  where
   declareEndpointFunction :: Handler -> DecsQ
-  declareEndpointFunction (Handler handlerName tbl action) = do
+  declareEndpointFunction (Handler handlerName tbl ctype action) = do
     let funName = mkName $ makeUpName handlerName
         typeRtn = getResponseObjectType action
         typeQRtn = [t| IO |] `appT` typeToTypeQ typeRtn
     sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQRtn tbl
 
     let bd = mkName "bd"
-        defaultMimeType = show . NE.head $ contentTypeCandidates typeRtn
+        defaultMimeType = show . NE.head $ contentTypes ctype
     moreArgs <- argumentNamesFromRoutingTable tbl
     let allArgs = varP bd : map varP moreArgs
         p = pathBuilderFromRoutingTable moreArgs tbl

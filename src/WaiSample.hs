@@ -1,7 +1,9 @@
 {-# LANGUAGE ApplicativeDo             #-}
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 
@@ -16,8 +18,13 @@ module WaiSample
   , Handler (..)
   , handler
   , RoutingTable (..)
-  , ToFromResponseBody (..)
+  , ContentType (..)
+  , ToResponseBody (..)
+  , FromResponseBody (..)
   , Json (..)
+  , FormUrlEncoded (..)
+  , PlainText (..)
+  , ChooseContentType (..)
   , getRoutingTableType
   , getResponseObjectType
   , showRoutes
@@ -66,19 +73,21 @@ runSampleApp = runEnv 8020 sampleApp
 
 sampleRoutes :: [Handler]
 sampleRoutes =
-  [ handler "index" root (\_ -> return ("index" :: T.Text))
-  , handler "aboutUs" (path "about/us") (\_ -> return ("About IIJ" :: T.Text))
-  , handler "aboutUsFinance" (path "about/us/finance") (\_ -> return ("Financial Report 2021" :: T.Text))
-  , handler "aboutFinance" (path "about/finance") (\_ -> return ("Financial Report 2020 /" :: T.Text))
+  [ handler "index" root PlainText (\_ -> return ("index" :: T.Text))
+  , handler "aboutUs" (path "about/us") PlainText (\_ -> return ("About IIJ" :: T.Text))
+  , handler "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return ("Financial Report 2021" :: T.Text))
+  , handler "aboutFinance" (path "about/finance") PlainText (\_ -> return ("Financial Report 2020 /" :: T.Text))
   -- TODO: Drop the initial slash?
-  , handler "aboutFinanceImpossible" (path "/about/finance/impossible") (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
+  , handler "aboutFinanceImpossible" (path "/about/finance/impossible") PlainText (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
   , handler "customerId"
       (path "customer/" *> decimalPiece)
+      (Json :<|> FormUrlEncoded)
       (return . customerOfId)
   , handler "customerIdJson"
     -- /customer/:id.json
     (path "customer/" *> decimalPiece <* path ".json")
-    (return . customerJsonOfId)
+    Json
+    (return . customerOfId)
   , handler "customerTransaction"
     ( do
         path "customer/"
@@ -87,15 +96,14 @@ sampleRoutes =
         transactionName <- T.replicate 2 <$> paramPiece
         pure (cId, transactionName)
       )
+    PlainText
     (\(cId, transactionName) ->
       return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
       )
   ]
  where
   customerOfId i =
-    customerJsonOfId i :<|> ("Customer ID: " <> T.pack (show i))
-  customerJsonOfId i =
-    Json $ Customer
+    Customer
       { customerName = "Mr. " <> T.pack (show i)
       , customerId = i
       }
@@ -111,6 +119,9 @@ instance ToJSON Customer where
 
 instance FromJSON Customer
 
+instance ToForm Customer
+
+instance FromForm Customer
 
 printRoutes :: IO ()
 printRoutes = TIO.putStrLn $ showRoutes sampleRoutes
@@ -160,58 +171,78 @@ runRoutingTable tbl =
 
 
 data Handler where
-  Handler :: (Typeable a, ToFromResponseBody resObj) => String -> RoutingTable a -> (a -> IO resObj) -> Handler
-
-class Typeable resObj => ToFromResponseBody resObj where
-  toResponseBody        :: MediaType -> resObj -> IO BL.ByteString
-  fromResponseBody      :: MediaType -> BL.ByteString -> IO resObj
-  contentTypeCandidates :: Proxy resObj -> NE.NonEmpty MediaType
-
+  Handler
+    :: (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
+    => String -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
   -- TODO: Add other header, status code etc.
 
-newtype Json a = Json { unJson :: a }
+class ContentType ctype where
+  contentTypes :: ctype -> NE.NonEmpty MediaType
 
-instance (ToJSON resObj, FromJSON resObj, Typeable resObj) => ToFromResponseBody (Json resObj) where
-  toResponseBody _        = return . Json.encode . unJson
-  fromResponseBody _      = either fail (return . Json) . Json.eitherDecode'
-  contentTypeCandidates _ = "application" // "json" :| []
+class (ContentType ctype, Typeable resObj) => ToResponseBody ctype resObj where
+  toResponseBody :: MediaType -> ctype -> resObj -> IO BL.ByteString
 
-newtype FormUrlEncoded a = FormUrlEncoded { unFormUrlEncode :: a }
+class (ContentType ctype, Typeable resObj) => FromResponseBody ctype resObj where
+  fromResponseBody :: MediaType -> ctype -> BL.ByteString -> IO resObj
 
-instance (ToForm resObj, FromForm resObj, Typeable resObj) => ToFromResponseBody (FormUrlEncoded resObj) where
-  toResponseBody _        = return . urlEncodeAsForm . unFormUrlEncode
-  fromResponseBody _      = either (fail . T.unpack) (return . FormUrlEncoded) . urlDecodeAsForm
-  contentTypeCandidates _ = "application" // "x-www-form-urlencoded" :| []
+data Json = Json
 
-instance ToFromResponseBody T.Text where
-  toResponseBody _        = return . BL.fromStrict . TE.encodeUtf8
-  fromResponseBody _      = return . TE.decodeUtf8 . BL.toStrict
-  contentTypeCandidates _ = "text" // "plain" /: ("charset", "UTF-8") :| []
+instance ContentType Json where
+  contentTypes _ = "application" // "json" :| []
 
+instance (ToJSON resObj, Typeable resObj) => ToResponseBody Json resObj where
+  toResponseBody _ _ = return . Json.encode
 
--- TODO: FIXME: more efficient way
-data ChooseMediaType a b = a :<|> b
+instance (FromJSON resObj, Typeable resObj) => FromResponseBody Json resObj where
+  fromResponseBody _ _ = either fail return . Json.eitherDecode'
 
-instance (ToFromResponseBody a, ToFromResponseBody b) => ToFromResponseBody (ChooseMediaType a b) where
-  toResponseBody mediaType (a :<|> b)
-    | mediaType `F.elem` contentTypeCandidates (Proxy :: Proxy a) = toResponseBody mediaType a
-    | mediaType `F.elem` contentTypeCandidates (Proxy :: Proxy b) = toResponseBody mediaType b
+data FormUrlEncoded = FormUrlEncoded
+
+instance ContentType FormUrlEncoded where
+  contentTypes _ = "application" // "x-www-form-urlencoded" :| []
+
+instance (ToForm resObj, Typeable resObj) => ToResponseBody FormUrlEncoded resObj where
+  toResponseBody _ _ = return . urlEncodeAsForm
+
+instance (FromForm resObj, Typeable resObj) => FromResponseBody FormUrlEncoded resObj where
+  fromResponseBody _ _ = either (fail . T.unpack) return . urlDecodeAsForm
+
+data PlainText = PlainText
+
+instance ContentType PlainText where
+  contentTypes _ = "text" // "plain" /: ("charset", "UTF-8") :| []
+
+instance ToResponseBody PlainText T.Text where
+  toResponseBody _ _ = return . BL.fromStrict . TE.encodeUtf8
+
+instance FromResponseBody PlainText T.Text where
+  fromResponseBody _ _ = return . TE.decodeUtf8 . BL.toStrict
+
+data ChooseContentType a b = a :<|> b
+
+instance (ContentType a, ContentType b) => ContentType (ChooseContentType a b) where
+  contentTypes (a :<|> b) = contentTypes a <> contentTypes b
+
+instance (ToResponseBody a resObj, ToResponseBody b resObj, Typeable resObj) => ToResponseBody (ChooseContentType a b) resObj where
+  toResponseBody mediaType (a :<|> b) resObj
+    | mediaType `F.elem` contentTypes a = toResponseBody mediaType a resObj
+    | mediaType `F.elem` contentTypes b = toResponseBody mediaType b resObj
     | otherwise = fail "No suitable media type"
 
-  -- TODO: FIXME: 無限ループが起こる
-  fromResponseBody mediaType bs
-    | mediaType `F.elem` contentTypeCandidates (Proxy :: Proxy a) = fromResponseBody mediaType bs
-    | mediaType `F.elem` contentTypeCandidates (Proxy :: Proxy b) = fromResponseBody mediaType bs
+instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseBody (ChooseContentType a b) resObj where
+  fromResponseBody mediaType (a :<|> b) bs
+    | mediaType `F.elem` contentTypes a = fromResponseBody mediaType a bs
+    | mediaType `F.elem` contentTypes b = fromResponseBody mediaType b bs
     | otherwise = fail "No suitable media type"
-
-  contentTypeCandidates _ = contentTypeCandidates (Proxy :: Proxy a) <> contentTypeCandidates (Proxy :: Proxy b)
 
 
 getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
 getResponseObjectType _ = Proxy
 
 
-handler :: forall a resObj. (Typeable a, ToFromResponseBody resObj) => String -> RoutingTable a -> (a -> IO resObj) -> Handler
+handler
+  :: forall a ctype resObj. (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
+  => String -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
 handler = Handler
 
 
@@ -226,23 +257,20 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
 
 
 runHandler :: Handler -> Request -> Maybe (IO Response)
-runHandler (Handler _name tbl hdl) req =
+runHandler (Handler _name tbl ctype hdl) req =
   act <$> runRoutingTable tbl req
  where
   act x = do
-    let mMime = matchAccept (NE.toList (contentTypeCandidates (typeOfResponse hdl))) acceptHeader
+    let mMime = matchAccept (NE.toList (contentTypes ctype)) acceptHeader
     case mMime of
         Just mime -> do
-          resObj <- hdl x -- TODO: Maybe pass MIME type here to optimize building response bodies.
-          resBody <- toResponseBody mime resObj
+          resObj <- hdl x
+          resBody <- toResponseBody mime ctype resObj
           return $ responseLBS status200 [(hContentType, renderHeader mime)] resBody
         Nothing ->
           return $ responseLBS status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable"
 
   acceptHeader = fromMaybe "*/*" . L.lookup "Accept" $ requestHeaders req
-
-  typeOfResponse :: (a -> IO resObj) -> Proxy resObj
-  typeOfResponse _ = Proxy
 
 
 parserFromRoutingTable :: forall a. RoutingTable a -> AT.Parser a
@@ -264,4 +292,4 @@ showRoutes' (ApPath tblF tblA) = showRoutes' tblF <> showRoutes' tblA
 showRoutes' (ParsedPath _)     = ":param" -- TODO: Name the parameter
 
 extractRoutingTable :: Handler -> RoutingTable ()
-extractRoutingTable (Handler _name tbl _hdl) = void tbl
+extractRoutingTable (Handler _name tbl _ctype _hdl) = void tbl
