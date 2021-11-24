@@ -52,14 +52,14 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
             do
               res <- $(varE bd) $(p)
               let headerName = CI.mk $ B.pack "Content-Type"
-                  contentTypes = getResponseHeader headerName res
-                  returnedContentType = headDef (B.pack defaultMimeType) contentTypes
+                  contentTypesFromServer = getResponseHeader headerName res
+                  returnedContentType = headDef (B.pack defaultMimeType) contentTypesFromServer
                   mContentType = parseAccept returnedContentType
               contentType <- maybe
                 (fail $ "Invalid Content-Type returned from the server: " ++ show returnedContentType)
                 return
                 mContentType
-              fromResponseBody contentType $ getResponseBody res
+              fromResponseBody contentType ctype $ getResponseBody res
           |]
     def <- funD
       funName

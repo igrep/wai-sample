@@ -1,5 +1,6 @@
 {-# LANGUAGE ApplicativeDo             #-}
 {-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DeriveLift                #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
@@ -49,6 +50,7 @@ import qualified Data.Text.Encoding          as TE
 import qualified Data.Text.IO                as TIO
 import           Data.Typeable               (Typeable)
 import           GHC.Generics                (Generic)
+import           Language.Haskell.TH.Syntax  (Lift)
 import           Network.HTTP.Media          (MediaType, matchAccept,
                                               renderHeader, (//), (/:))
 import           Network.HTTP.Types.Header   (hContentType)
@@ -176,7 +178,7 @@ data Handler where
     => String -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
   -- TODO: Add other header, status code etc.
 
-class ContentType ctype where
+class Lift ctype => ContentType ctype where
   contentTypes :: ctype -> NE.NonEmpty MediaType
 
 class (ContentType ctype, Typeable resObj) => ToResponseBody ctype resObj where
@@ -185,7 +187,7 @@ class (ContentType ctype, Typeable resObj) => ToResponseBody ctype resObj where
 class (ContentType ctype, Typeable resObj) => FromResponseBody ctype resObj where
   fromResponseBody :: MediaType -> ctype -> BL.ByteString -> IO resObj
 
-data Json = Json
+data Json = Json deriving Lift
 
 instance ContentType Json where
   contentTypes _ = "application" // "json" :| []
@@ -196,7 +198,7 @@ instance (ToJSON resObj, Typeable resObj) => ToResponseBody Json resObj where
 instance (FromJSON resObj, Typeable resObj) => FromResponseBody Json resObj where
   fromResponseBody _ _ = either fail return . Json.eitherDecode'
 
-data FormUrlEncoded = FormUrlEncoded
+data FormUrlEncoded = FormUrlEncoded deriving Lift
 
 instance ContentType FormUrlEncoded where
   contentTypes _ = "application" // "x-www-form-urlencoded" :| []
@@ -207,7 +209,7 @@ instance (ToForm resObj, Typeable resObj) => ToResponseBody FormUrlEncoded resOb
 instance (FromForm resObj, Typeable resObj) => FromResponseBody FormUrlEncoded resObj where
   fromResponseBody _ _ = either (fail . T.unpack) return . urlDecodeAsForm
 
-data PlainText = PlainText
+data PlainText = PlainText deriving Lift
 
 instance ContentType PlainText where
   contentTypes _ = "text" // "plain" /: ("charset", "UTF-8") :| []
@@ -218,7 +220,7 @@ instance ToResponseBody PlainText T.Text where
 instance FromResponseBody PlainText T.Text where
   fromResponseBody _ _ = return . TE.decodeUtf8 . BL.toStrict
 
-data ChooseContentType a b = a :<|> b
+data ChooseContentType a b = a :<|> b deriving Lift
 
 instance (ContentType a, ContentType b) => ContentType (ChooseContentType a b) where
   contentTypes (a :<|> b) = contentTypes a <> contentTypes b
@@ -233,7 +235,7 @@ instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseB
   fromResponseBody mediaType (a :<|> b) bs
     | mediaType `F.elem` contentTypes a = fromResponseBody mediaType a bs
     | mediaType `F.elem` contentTypes b = fromResponseBody mediaType b bs
-    | otherwise = fail "No suitable media type"
+    | otherwise = fail "No suitable media type" -- Perhaps should improve this error message.
 
 
 getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
