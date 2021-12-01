@@ -50,24 +50,24 @@ spec =
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
     it "/customer/:customerId returns application/json given */* as the Accept header" . runStateTClientState $ do
-      let customerId = "1752"
+      let cId = "1752"
           req = defaultRequest
-                  `setPath` ("/customer/" <> BSL.toStrict customerId)
+                  `setPath` ("/customer/" <> BSL.toStrict cId)
                   `addHeader` ("Accept", "*/*")
       res <- request req
       assertStatus 200 res
       let expectedBody =
-            "{\"customerName\":\"Mr. " <> customerId <> "\","
+            "{\"customerName\":\"Mr. " <> cId <> "\","
               <> "\"customerId\":"
-              <> customerId
+              <> cId
               <> "}"
       assertBody expectedBody res
       assertHeader "Content-Type" "application/json" res
 
     it "/customer/:customerId returns 406 given an unknown Accept header" . runStateTClientState $ do
-      let customerId = "1752"
+      let cId = "1752"
           req = defaultRequest
-                  `setPath` ("/customer/" <> BSL.toStrict customerId)
+                  `setPath` ("/customer/" <> BSL.toStrict cId)
                   `addHeader` ("Accept", "image/*")
       res <- request req
       assertStatus 406 res
@@ -75,16 +75,16 @@ spec =
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
     it "/customer/:customerId.json returns a JSON" . runStateTClientState $ do
-      let customerId = "1752"
+      let cId = "1752"
           req = defaultRequest
-                  `setPath` ("/customer/" <> BSL.toStrict customerId <> ".json")
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".json")
                   `addHeader` ("Accept", "text/html,*/*")
       res <- request req
       assertStatus 200 res
       let expectedBody =
-            "{\"customerName\":\"Mr. " <> customerId <> "\","
+            "{\"customerName\":\"Mr. " <> cId <> "\","
               <> "\"customerId\":"
-              <> customerId
+              <> cId
               <> "}"
       assertBody expectedBody res
       assertHeader "Content-Type" "application/json" res
