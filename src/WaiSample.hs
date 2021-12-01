@@ -12,6 +12,8 @@ module WaiSample
   ( sampleApp
   , runSampleApp
   , sampleRoutes
+  , Customer (..)
+
   , root
   , path
   , paramPiece
@@ -114,7 +116,7 @@ sampleRoutes =
 data Customer = Customer
   { customerName :: T.Text
   , customerId   :: Integer
-  } deriving (Generic, Show)
+  } deriving (Eq, Generic, Show)
 
 instance ToJSON Customer where
   toEncoding = Json.genericToEncoding Json.defaultOptions
