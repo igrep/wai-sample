@@ -97,7 +97,7 @@ sampleRoutes =
         path "customer/"
         cId <- decimalPiece
         path "/transaction/"
-        transactionName <- T.replicate 2 <$> paramPiece
+        transactionName <- paramPiece
         pure (cId, transactionName)
       )
     PlainText

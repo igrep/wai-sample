@@ -28,6 +28,7 @@ import           Network.HTTP.Client.Conduit (parseUrlThrow)
 import           Network.HTTP.Media          (parseAccept)
 import           Network.HTTP.Simple         (Response, getResponseBody,
                                               getResponseHeader, httpLBS)
+import qualified Network.URI.Encode          as URI
 import           Safe                        (headDef)
 import           WaiSample
 import           Web.HttpApiData             (toUrlPiece)
@@ -50,7 +51,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         p = pathBuilderFromRoutingTable moreArgs tbl
         implE = [e|
             do
-              res <- $(varE bd) $(p)
+              res <- $(varE bd) $ URI.encode $(p)
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypesFromServer = getResponseHeader headerName res
                   returnedContentType = headDef (B.pack defaultMimeType) contentTypesFromServer

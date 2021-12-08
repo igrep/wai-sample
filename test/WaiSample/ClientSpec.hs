@@ -44,8 +44,20 @@ spec =
                 }
           sampleCustomerId backend cId `shouldReturn` expected
 
-      --it "customerIdJson returns a Customer object"
-      --it "customerTransaction returns a transaction information"
+      it "customerIdJson returns a Customer object" $
+        property $ \cId -> do
+          let expected = Customer
+                { customerName = "Mr. " <> T.pack (show cId)
+                , customerId = cId
+                }
+          sampleCustomerIdJson backend cId `shouldReturn` expected
+
+      it "customerTransaction returns a transaction information" $
+        property $ \(cId, tNameS) -> do
+          let tName = T.pack tNameS
+              expected =
+                "Customer " <> T.pack (show cId) <> " Transaction " <> tName
+          sampleCustomerTransaction backend cId tName `shouldReturn` expected
 
 
 withServer :: IO () -> IO ()

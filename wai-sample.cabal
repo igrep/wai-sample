@@ -48,6 +48,7 @@ library
     , http-conduit
     , safe
     , template-haskell
+    , uri-encode
 
 executable wai-sample-exe
   import: common
