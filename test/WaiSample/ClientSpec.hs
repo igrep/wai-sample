@@ -5,13 +5,11 @@ module WaiSample.ClientSpec
   ) where
 
 
-import           Control.Concurrent       (forkIO, killThread)
-import           Control.Exception        (bracket)
 import qualified Data.Text                as T
-import           Network.Wai.Handler.Warp (Port, run)
+import           Network.Wai.Handler.Warp (Port, testWithApplication)
 import           Test.QuickCheck          (property)
-import           Test.Syd                 (Spec, aroundAll_, describe, it,
-                                           shouldReturn)
+import           Test.Syd                 (Spec, aroundAll, describe,
+                                           itWithOuter, shouldReturn)
 
 import           WaiSample                (Customer (..), sampleApp)
 import           WaiSample.Client         (httpConduitBackend)
@@ -20,23 +18,28 @@ import           WaiSample.Client.Sample
 
 spec :: Spec
 spec =
-  aroundAll_ withServer $
+  aroundAll withServer $
     describe "WaiSample.Client.Sample" $ do
-      let backend = httpConduitBackend $ "http://localhost:" ++ show port ++ "/"
+      let buildBackend port = httpConduitBackend $ "http://localhost:" ++ show port ++ "/"
 
-      it "index returns \"index\"" $
+      itWithOuter "index returns \"index\"" $ \port -> do
+        let backend = buildBackend port
         sampleIndex backend `shouldReturn` "index"
 
-      it "aboutUs returns \"About IIJ\"" $
+      itWithOuter "aboutUs returns \"About IIJ\"" $ \port -> do
+        let backend = buildBackend port
         sampleAboutUs backend `shouldReturn` "About IIJ"
 
-      it "aboutUsFinance returns \"Financial Report 2021\"" $
+      itWithOuter "aboutUsFinance returns \"Financial Report 2021\"" $ \port -> do
+        let backend = buildBackend port
         sampleAboutUsFinance backend `shouldReturn` "Financial Report 2021"
 
-      it "aboutFinance returns \"Financial Report 2020 /\"" $
+      itWithOuter "aboutFinance returns \"Financial Report 2020 /\"" $ \port -> do
+        let backend = buildBackend port
         sampleAboutFinance backend `shouldReturn` "Financial Report 2020 /"
 
-      it "customerId returns a Customer object" $
+      itWithOuter "customerId returns a Customer object" $ \port -> do
+        let backend = buildBackend port
         property $ \cId -> do
           let expected = Customer
                 { customerName = "Mr. " <> T.pack (show cId)
@@ -44,7 +47,8 @@ spec =
                 }
           sampleCustomerId backend cId `shouldReturn` expected
 
-      it "customerIdJson returns a Customer object" $
+      itWithOuter "customerIdJson returns a Customer object" $ \port -> do
+        let backend = buildBackend port
         property $ \cId -> do
           let expected = Customer
                 { customerName = "Mr. " <> T.pack (show cId)
@@ -52,7 +56,8 @@ spec =
                 }
           sampleCustomerIdJson backend cId `shouldReturn` expected
 
-      it "customerTransaction returns a transaction information" $
+      itWithOuter "customerTransaction returns a transaction information" $ \port -> do
+        let backend = buildBackend port
         property $ \(cId, tNameS) -> do
           let tName = T.pack tNameS
               expected =
@@ -60,13 +65,5 @@ spec =
           sampleCustomerTransaction backend cId tName `shouldReturn` expected
 
 
-withServer :: IO () -> IO ()
-withServer body =
-  bracket
-    (forkIO (run port sampleApp))
-    killThread
-    (\_ -> body)
-
--- TODO: decide port at random
-port :: Port
-port = 8020
+withServer :: (Port -> IO ()) -> IO ()
+withServer = testWithApplication (return sampleApp)
