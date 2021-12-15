@@ -36,6 +36,7 @@ module WaiSample
 
 import           Control.Error.Util          (hush)
 import           Control.Exception           (bracket_)
+import           Control.Monad               (guard)
 import           Data.Aeson                  (FromJSON, ToJSON)
 import qualified Data.Aeson                  as Json
 import qualified Data.Attoparsec.Text        as AT
@@ -56,9 +57,9 @@ import           Language.Haskell.TH.Syntax  (Lift)
 import           Network.HTTP.Media          (MediaType, matchAccept,
                                               renderHeader, (//), (/:))
 import           Network.HTTP.Types.Header   (hContentType)
+import           Network.HTTP.Types.Method   (Method)
 import           Network.HTTP.Types.Status   (status200, status404, status406)
-import           Network.Wai                 (Application,
-                                              Request (requestHeaders),
+import           Network.Wai                 (Application, Request (requestHeaders, requestMethod),
                                               Response, pathInfo, responseLBS)
 import           Network.Wai.Handler.Warp    (runEnv)
 import           Web.FormUrlEncoded          (FromForm, ToForm, urlDecodeAsForm)
@@ -77,22 +78,22 @@ runSampleApp = runEnv 8020 sampleApp
 
 sampleRoutes :: [Handler]
 sampleRoutes =
-  [ handler "index" root PlainText (\_ -> return ("index" :: T.Text))
-  , handler "aboutUs" (path "about/us") PlainText (\_ -> return ("About IIJ" :: T.Text))
-  , handler "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return ("Financial Report 2021" :: T.Text))
-  , handler "aboutFinance" (path "about/finance") PlainText (\_ -> return ("Financial Report 2020 /" :: T.Text))
+  [ get "index" root PlainText (\_ -> return ("index" :: T.Text))
+  , get "aboutUs" (path "about/us") PlainText (\_ -> return ("About IIJ" :: T.Text))
+  , get "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return ("Financial Report 2021" :: T.Text))
+  , get "aboutFinance" (path "about/finance") PlainText (\_ -> return ("Financial Report 2020 /" :: T.Text))
   -- TODO: Drop the initial slash?
-  , handler "aboutFinanceImpossible" (path "/about/finance/impossible") PlainText (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
-  , handler "customerId"
+  , get "aboutFinanceImpossible" (path "/about/finance/impossible") PlainText (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
+  , get "customerId"
       (path "customer/" *> decimalPiece)
       (Json :<|> FormUrlEncoded)
       (return . customerOfId)
-  , handler "customerIdJson"
+  , get "customerIdJson"
     -- /customer/:id.json
     (path "customer/" *> decimalPiece <* path ".json")
     Json
     (return . customerOfId)
-  , handler "customerTransaction"
+  , get "customerTransaction"
     ( do
         path "customer/"
         cId <- decimalPiece
@@ -104,6 +105,7 @@ sampleRoutes =
     (\(cId, transactionName) ->
       return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
       )
+  -- TODO: Add other methods' functions: get, post, put, delete, patch
   ]
  where
   customerOfId i =
@@ -177,7 +179,7 @@ runRoutingTable tbl =
 data Handler where
   Handler
     :: (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
-    => String -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
+    => String -> Method -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
   -- TODO: Add other header, status code etc.
 
 class Lift ctype => ContentType ctype where
@@ -246,7 +248,7 @@ getResponseObjectType _ = Proxy
 
 handler
   :: forall a ctype resObj. (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
-  => String -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
+  => String -> Method -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
 handler = Handler
 
 
@@ -261,7 +263,8 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
 
 
 runHandler :: Handler -> Request -> Maybe (IO Response)
-runHandler (Handler _name tbl ctype hdl) req =
+runHandler (Handler _name method tbl ctype hdl) req = do
+  guard $ method == requestMethod req
   act <$> runRoutingTable tbl req
  where
   act x = do
@@ -296,4 +299,4 @@ showRoutes' (ApPath tblF tblA) = showRoutes' tblF <> showRoutes' tblA
 showRoutes' (ParsedPath _)     = ":param" -- TODO: Name the parameter
 
 extractRoutingTable :: Handler -> RoutingTable ()
-extractRoutingTable (Handler _name tbl _ctype _hdl) = void tbl
+extractRoutingTable (Handler _name _method tbl _ctype _hdl) = void tbl
