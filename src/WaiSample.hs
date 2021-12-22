@@ -20,6 +20,11 @@ module WaiSample
   , decimalPiece
   , Handler (..)
   , handler
+  , get
+  , post
+  , put
+  , delete
+  , patch
   , RoutingTable (..)
   , ContentType (..)
   , ToResponseBody (..)
@@ -36,7 +41,6 @@ module WaiSample
 
 import           Control.Error.Util          (hush)
 import           Control.Exception           (bracket_)
-import           Control.Monad               (guard)
 import           Data.Aeson                  (FromJSON, ToJSON)
 import qualified Data.Aeson                  as Json
 import qualified Data.Attoparsec.Text        as AT
@@ -57,8 +61,11 @@ import           Language.Haskell.TH.Syntax  (Lift)
 import           Network.HTTP.Media          (MediaType, matchAccept,
                                               renderHeader, (//), (/:))
 import           Network.HTTP.Types.Header   (hContentType)
-import           Network.HTTP.Types.Method   (Method)
-import           Network.HTTP.Types.Status   (status200, status404, status406)
+import           Network.HTTP.Types.Method   (Method, methodDelete, methodGet,
+                                              methodPatch, methodPost,
+                                              methodPut)
+import           Network.HTTP.Types.Status   (status200, status201, status404,
+                                              status405, status406)
 import           Network.Wai                 (Application, Request (requestHeaders, requestMethod),
                                               Response, pathInfo, responseLBS)
 import           Network.Wai.Handler.Warp    (runEnv)
@@ -105,7 +112,10 @@ sampleRoutes =
     (\(cId, transactionName) ->
       return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
       )
-  -- TODO: Add other methods' functions: get, post, put, delete, patch
+  , post "createProduct"
+      (path "products")
+      PlainText
+      (\_ -> return ("Product created" :: T.Text))
   ]
  where
   customerOfId i =
@@ -252,6 +262,16 @@ handler
 handler = Handler
 
 
+get, post, put, delete, patch
+  :: forall a ctype resObj. (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
+  => String -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
+get name    = handler name methodGet
+post name   = handler name methodPost
+put name    = handler name methodPut
+delete name = handler name methodDelete
+patch name  = handler name methodPatch
+
+
 handles :: [Handler] -> Application
 handles hdls req respond' = bracket_ (return ()) (return ()) $ do
   let foundResponds = listToMaybe $ mapMaybe (`runHandler` req) hdls
@@ -264,8 +284,9 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
 
 runHandler :: Handler -> Request -> Maybe (IO Response)
 runHandler (Handler _name method tbl ctype hdl) req = do
-  guard $ method == requestMethod req
-  act <$> runRoutingTable tbl req
+  if method == requestMethod req
+    then act <$> runRoutingTable tbl req
+    else Just . return $ responseLBS status405 [(hContentType, "text/plain;charset=UTF-8")] "405 Method not allowed."
  where
   act x = do
     let mMime = matchAccept (NE.toList (contentTypes ctype)) acceptHeader
@@ -273,7 +294,8 @@ runHandler (Handler _name method tbl ctype hdl) req = do
         Just mime -> do
           resObj <- hdl x
           resBody <- toResponseBody mime ctype resObj
-          return $ responseLBS status200 [(hContentType, renderHeader mime)] resBody
+          let statusCode = if method == methodPost then status201 else status200
+          return $ responseLBS statusCode [(hContentType, renderHeader mime)] resBody
         Nothing ->
           return $ responseLBS status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable"
 

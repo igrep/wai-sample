@@ -8,7 +8,7 @@ module WaiSample.Client
   , httpConduitBackend
   ) where
 
-import           Control.Monad.State.Strict  (State, evalState, get, put)
+import qualified Control.Monad.State.Strict  as SS
 import qualified Data.ByteString.Char8       as B
 import qualified Data.ByteString.Lazy.Char8  as BL
 import qualified Data.CaseInsensitive        as CI
@@ -28,6 +28,7 @@ import           Network.HTTP.Client.Conduit (parseUrlThrow)
 import           Network.HTTP.Media          (parseAccept)
 import           Network.HTTP.Simple         (Response, getResponseBody,
                                               getResponseHeader, httpLBS)
+import           Network.HTTP.Types.Method   (Method)
 import qualified Network.URI.Encode          as URI
 import           Safe                        (headDef)
 import           WaiSample
@@ -38,7 +39,7 @@ declareClient :: String -> [Handler] -> DecsQ
 declareClient prefix = fmap concat . mapM declareEndpointFunction
  where
   declareEndpointFunction :: Handler -> DecsQ
-  declareEndpointFunction (Handler handlerName tbl ctype action) = do
+  declareEndpointFunction (Handler handlerName meth tbl ctype action) = do
     let funName = mkName $ makeUpName handlerName
         typeRtn = getResponseObjectType action
         typeQRtn = [t| IO |] `appT` typeToTypeQ typeRtn
@@ -51,7 +52,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         p = pathBuilderFromRoutingTable moreArgs tbl
         implE = [e|
             do
-              res <- $(varE bd) $ URI.encode $(p)
+              res <- $(varE bd) (B.pack $(stringE $ B.unpack meth)) $ URI.encode $(p)
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypesFromServer = getResponseHeader headerName res
                   returnedContentType = headDef (B.pack defaultMimeType) contentTypesFromServer
@@ -106,9 +107,9 @@ argumentNamesFromRoutingTable = sequence . reverse . go []
 
 
 pathBuilderFromRoutingTable :: [Name] -> RoutingTable a -> ExpQ
-pathBuilderFromRoutingTable qns = (`evalState` qns) . go
+pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
  where
-  go :: RoutingTable b -> State [Name] ExpQ
+  go :: RoutingTable b -> SS.State [Name] ExpQ
   go (LiteralPath p) =
     return [e| $(stringE $ T.unpack p) |]
   go (FmapPath _f tbl) =
@@ -123,13 +124,13 @@ pathBuilderFromRoutingTable qns = (`evalState` qns) . go
     arg0 <- popArgs
     return [e| T.unpack $ toUrlPiece $(varE arg0) |]
 
-  popArgs :: State [Name] Name
+  popArgs :: SS.State [Name] Name
   popArgs = do
-    args <- get
+    args <- SS.get
     case args of
       [] -> error "pathBuilderFromRoutingTable: Assertion failure: No more argument names!"
       (arg0 : argsLeft) -> do
-        put argsLeft
+        SS.put argsLeft
         return arg0
 
 
@@ -155,10 +156,10 @@ funcT a b = [t| (->) |] `appT` a `appT` b
 infixr 1 `funcT`
 
 
-type Backend = String -> IO (Response BL.ByteString)
+type Backend = Method -> String -> IO (Response BL.ByteString)
 
 
 httpConduitBackend :: String -> Backend
-httpConduitBackend rootUrl pathPieces = do
-  req <- parseUrlThrow $ rootUrl ++ pathPieces
+httpConduitBackend rootUrl method pathPieces = do
+  req <- parseUrlThrow $ B.unpack method ++ " " ++ rootUrl ++ pathPieces
   httpLBS req
