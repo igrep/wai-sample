@@ -147,6 +147,7 @@ getRoutingTableType :: RoutingTable a -> Proxy a
 getRoutingTableType _ = Proxy
 
 
+-- TODO: Rename into Route?
 data RoutingTable a where
   LiteralPath :: T.Text -> RoutingTable T.Text
   -- | '<$>'

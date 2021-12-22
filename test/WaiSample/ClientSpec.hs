@@ -64,6 +64,8 @@ spec =
                 "Customer " <> T.pack (show cId) <> " Transaction " <> tName
           sampleCustomerTransaction backend cId tName `shouldReturn` expected
 
+      -- TODO: Test createProduct
+
 
 withServer :: (Port -> IO ()) -> IO ()
 withServer = testWithApplication (return sampleApp)
