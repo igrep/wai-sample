@@ -4,6 +4,3 @@
 [submodule "sydtest"]
 	path = sydtest
 	url = https://github.com/igrep/sydtest.git
-[submodule "wai"]
-	path = wai
-	url = https://github.com/igrep/wai.git
