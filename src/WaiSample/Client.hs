@@ -26,8 +26,9 @@ import           Language.Haskell.TH.Syntax  (Name)
 import           LiftType                    (liftTypeQ)
 import           Network.HTTP.Client.Conduit (parseUrlThrow)
 import           Network.HTTP.Media          (parseAccept)
-import           Network.HTTP.Simple         (Response, getResponseBody,
+import           Network.HTTP.Simple         (getResponseBody,
                                               getResponseHeader, httpLBS)
+import qualified Network.HTTP.Simple         as HS
 import           Network.HTTP.Types.Method   (Method)
 import qualified Network.URI.Encode          as URI
 import           Safe                        (headDef)
@@ -156,7 +157,7 @@ funcT a b = [t| (->) |] `appT` a `appT` b
 infixr 1 `funcT`
 
 
-type Backend = Method -> String -> IO (Response BL.ByteString)
+type Backend = Method -> String -> IO (HS.Response BL.ByteString)
 
 
 httpConduitBackend :: String -> Backend

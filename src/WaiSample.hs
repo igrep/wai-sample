@@ -20,11 +20,17 @@ module WaiSample
   , decimalPiece
   , Handler (..)
   , handler
+
   , get
   , post
   , put
   , delete
   , patch
+
+  , Response (..)
+  , body
+  , status
+
   , RoutingTable (..)
   , ContentType (..)
   , ToResponseBody (..)
@@ -64,10 +70,11 @@ import           Network.HTTP.Types.Header   (hContentType)
 import           Network.HTTP.Types.Method   (Method, methodDelete, methodGet,
                                               methodPatch, methodPost,
                                               methodPut)
-import           Network.HTTP.Types.Status   (status200, status201, status404,
-                                              status405, status406)
+import           Network.HTTP.Types.Status   (Status, status200, status201,
+                                              status404, status405, status406)
 import           Network.Wai                 (Application, Request (requestHeaders, requestMethod),
-                                              Response, pathInfo, responseLBS)
+                                              pathInfo, responseLBS)
+import qualified Network.Wai                 as Wai
 import           Network.Wai.Handler.Warp    (runEnv)
 import           Web.FormUrlEncoded          (FromForm, ToForm, urlDecodeAsForm)
 import           Web.HttpApiData             (FromHttpApiData, ToHttpApiData,
@@ -85,21 +92,21 @@ runSampleApp = runEnv 8020 sampleApp
 
 sampleRoutes :: [Handler]
 sampleRoutes =
-  [ get "index" root PlainText (\_ -> return ("index" :: T.Text))
-  , get "aboutUs" (path "about/us") PlainText (\_ -> return ("About IIJ" :: T.Text))
-  , get "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return ("Financial Report 2021" :: T.Text))
-  , get "aboutFinance" (path "about/finance") PlainText (\_ -> return ("Financial Report 2020 /" :: T.Text))
+  [ get "index" root PlainText (\_ -> return $ body ("index" :: T.Text))
+  , get "aboutUs" (path "about/us") PlainText (\_ -> return $ body ("About IIJ" :: T.Text))
+  , get "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return $ body ("Financial Report 2021" :: T.Text))
+  , get "aboutFinance" (path "about/finance") PlainText (\_ -> return $ body ("Financial Report 2020 /" :: T.Text))
   -- TODO: Drop the initial slash?
-  , get "aboutFinanceImpossible" (path "/about/finance/impossible") PlainText (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
+  , get "aboutFinanceImpossible" (path "/about/finance/impossible") PlainText (\_ -> (fail "This should not be executed due to the leading slash" :: IO (Response T.Text)))
   , get "customerId"
       (path "customer/" *> decimalPiece)
       (Json :<|> FormUrlEncoded)
-      (return . customerOfId)
+      (return . body . customerOfId)
   , get "customerIdJson"
     -- /customer/:id.json
     (path "customer/" *> decimalPiece <* path ".json")
     Json
-    (return . customerOfId)
+    (return . body . customerOfId)
   , get "customerTransaction"
     ( do
         path "customer/"
@@ -110,12 +117,12 @@ sampleRoutes =
       )
     PlainText
     (\(cId, transactionName) ->
-      return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
+      return . body $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
       )
   , post "createProduct"
       (path "products")
       PlainText
-      (\_ -> return ("Product created" :: T.Text))
+      (\_ -> return $ body ("Product created" :: T.Text))
   ]
  where
   customerOfId i =
@@ -190,8 +197,13 @@ runRoutingTable tbl =
 data Handler where
   Handler
     :: (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
-    => String -> Method -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
-  -- TODO: Add other header, status code etc.
+    => String -> Method -> RoutingTable a -> ctype -> (a -> IO (Response resObj)) -> Handler
+
+data Response resObj = Response
+  { statusCode :: !(Maybe Status)
+  , bodyObj    :: !resObj
+  } deriving (Show, Eq)
+  -- TODO: Add other header etc.
 
 class Lift ctype => ContentType ctype where
   contentTypes :: ctype -> NE.NonEmpty MediaType
@@ -253,24 +265,32 @@ instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseB
     | otherwise = fail "No suitable media type" -- Perhaps should improve this error message.
 
 
-getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
+getResponseObjectType :: (a -> IO (Response resObj)) -> Proxy (Response resObj)
 getResponseObjectType _ = Proxy
 
 
 handler
   :: forall a ctype resObj. (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
-  => String -> Method -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
+  => String -> Method -> RoutingTable a -> ctype -> (a -> IO (Response resObj)) -> Handler
 handler = Handler
 
 
 get, post, put, delete, patch
   :: forall a ctype resObj. (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
-  => String -> RoutingTable a -> ctype -> (a -> IO resObj) -> Handler
+  => String -> RoutingTable a -> ctype -> (a -> IO (Response resObj)) -> Handler
 get name    = handler name methodGet
 post name   = handler name methodPost
 put name    = handler name methodPut
 delete name = handler name methodDelete
 patch name  = handler name methodPatch
+
+
+body :: resObj -> Response resObj
+body = Response Nothing
+
+
+status :: Status -> Response resObj -> Response resObj
+status newSt (Response _oldSt b) = Response (Just newSt) b
 
 
 handles :: [Handler] -> Application
@@ -283,22 +303,27 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
   handle404 = responseLBS status404 [(hContentType, "text/plain;charset=UTF-8")] "404 Not found."
 
 
-runHandler :: Handler -> Request -> Maybe (IO Response)
-runHandler (Handler _name method tbl ctype hdl) req = do
-  if method == requestMethod req
-    then act <$> runRoutingTable tbl req
-    else Just . return $ responseLBS status405 [(hContentType, "text/plain;charset=UTF-8")] "405 Method not allowed."
+runHandler :: Handler -> Request -> Maybe (IO Wai.Response)
+runHandler (Handler _name method tbl ctype hdl) req =
+  act <$> runRoutingTable tbl req
  where
-  act x = do
-    let mMime = matchAccept (NE.toList (contentTypes ctype)) acceptHeader
-    case mMime of
-        Just mime -> do
-          resObj <- hdl x
-          resBody <- toResponseBody mime ctype resObj
-          let statusCode = if method == methodPost then status201 else status200
-          return $ responseLBS statusCode [(hContentType, renderHeader mime)] resBody
-        Nothing ->
-          return $ responseLBS status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable"
+  act x =
+    if method == requestMethod req
+      then do
+        let mMime = matchAccept (NE.toList (contentTypes ctype)) acceptHeader
+        case mMime of
+            Just mime -> do
+              Response mst resObj <- hdl x
+              resBody <- toResponseBody mime ctype resObj
+              let statusCode =
+                    case mst of
+                        Just st -> st
+                        Nothing ->
+                          if method == methodPost then status201 else status200
+              return $ responseLBS statusCode [(hContentType, renderHeader mime)] resBody
+            Nothing ->
+              return $ responseLBS status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable"
+      else return $ responseLBS status405 [(hContentType, "text/plain;charset=UTF-8")] "405 Method not allowed."
 
   acceptHeader = fromMaybe "*/*" . L.lookup "Accept" $ requestHeaders req
 

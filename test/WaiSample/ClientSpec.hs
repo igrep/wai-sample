@@ -64,7 +64,9 @@ spec =
                 "Customer " <> T.pack (show cId) <> " Transaction " <> tName
           sampleCustomerTransaction backend cId tName `shouldReturn` expected
 
-      -- TODO: Test createProduct
+      itWithOuter "createProduct returns \"Product created\"" $ \port -> do
+        let backend = buildBackend port
+        sampleCreateProduct backend `shouldReturn` "Product created"
 
 
 withServer :: (Port -> IO ()) -> IO ()
