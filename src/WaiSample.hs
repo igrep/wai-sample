@@ -32,7 +32,7 @@ module WaiSample
   , status
 
   , RoutingTable (..)
-  , ContentType (..)
+  , HasContentTypes (..)
   , ToResponseBody (..)
   , FromResponseBody (..)
   , Json (..)
@@ -71,7 +71,8 @@ import           Network.HTTP.Types.Method   (Method, methodDelete, methodGet,
                                               methodPatch, methodPost,
                                               methodPut)
 import           Network.HTTP.Types.Status   (Status, status200, status201,
-                                              status404, status405, status406)
+                                              status404, status405, status406,
+                                              status500)
 import           Network.Wai                 (Application, Request (requestHeaders, requestMethod),
                                               pathInfo, responseLBS)
 import qualified Network.Wai                 as Wai
@@ -92,7 +93,8 @@ runSampleApp = runEnv 8020 sampleApp
 
 sampleRoutes :: [Handler]
 sampleRoutes =
-  [ get "index" root PlainText (\_ -> return $ body ("index" :: T.Text))
+  -- get "index" root (WithStatus status505 Json :<|> WithStatus status500 PlainText)) (\_ -> return $ body (Right "index" :: Either Error T.Text))
+  [ get "index" root (WithStatus status500 PlainText) (\_ -> return $ body ("index" :: T.Text))
   , get "aboutUs" (path "about/us") PlainText (\_ -> return $ body ("About IIJ" :: T.Text))
   , get "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return $ body ("Financial Report 2021" :: T.Text))
   , get "aboutFinance" (path "about/finance") PlainText (\_ -> return $ body ("Financial Report 2020 /" :: T.Text))
@@ -196,8 +198,14 @@ runRoutingTable tbl =
 
 data Handler where
   Handler
-    :: (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
-    => String -> Method -> RoutingTable a -> ctype -> (a -> IO (Response resObj)) -> Handler
+    ::
+     ( Typeable a
+     , HasStatusCodes resTyp
+     , HasContentTypes resTyp
+     , ToResponseBody resTyp resObj
+     , FromResponseBody resTyp resObj
+     )
+    => String -> Method -> RoutingTable a -> resTyp -> (a -> IO (Response resObj)) -> Handler
 
 data Response resObj = Response
   { statusCode :: !(Maybe Status)
@@ -205,18 +213,24 @@ data Response resObj = Response
   } deriving (Show, Eq)
   -- TODO: Add other header etc.
 
-class Lift ctype => ContentType ctype where
-  contentTypes :: ctype -> NE.NonEmpty MediaType
+class HasStatusCodes resTyp where
+  statusCodes :: resTyp -> [Status]
+  statusCodes _ = []
 
-class (ContentType ctype, Typeable resObj) => ToResponseBody ctype resObj where
-  toResponseBody :: MediaType -> ctype -> resObj -> IO BL.ByteString
+class Lift resTyp => HasContentTypes resTyp where
+  contentTypes :: resTyp -> NE.NonEmpty MediaType
 
-class (ContentType ctype, Typeable resObj) => FromResponseBody ctype resObj where
-  fromResponseBody :: MediaType -> ctype -> BL.ByteString -> IO resObj
+class (HasContentTypes resTyp, Typeable resObj) => ToResponseBody resTyp resObj where
+  toResponseBody :: MediaType -> resTyp -> resObj -> IO BL.ByteString
+
+class (HasContentTypes resTyp, Typeable resObj) => FromResponseBody resTyp resObj where
+  fromResponseBody :: MediaType -> resTyp -> BL.ByteString -> IO resObj
 
 data Json = Json deriving Lift
 
-instance ContentType Json where
+instance HasStatusCodes Json
+
+instance HasContentTypes Json where
   contentTypes _ = "application" // "json" :| []
 
 instance (ToJSON resObj, Typeable resObj) => ToResponseBody Json resObj where
@@ -227,7 +241,9 @@ instance (FromJSON resObj, Typeable resObj) => FromResponseBody Json resObj wher
 
 data FormUrlEncoded = FormUrlEncoded deriving Lift
 
-instance ContentType FormUrlEncoded where
+instance HasStatusCodes FormUrlEncoded
+
+instance HasContentTypes FormUrlEncoded where
   contentTypes _ = "application" // "x-www-form-urlencoded" :| []
 
 instance (ToForm resObj, Typeable resObj) => ToResponseBody FormUrlEncoded resObj where
@@ -238,7 +254,9 @@ instance (FromForm resObj, Typeable resObj) => FromResponseBody FormUrlEncoded r
 
 data PlainText = PlainText deriving Lift
 
-instance ContentType PlainText where
+instance HasStatusCodes PlainText
+
+instance HasContentTypes PlainText where
   contentTypes _ = "text" // "plain" /: ("charset", "UTF-8") :| []
 
 instance ToResponseBody PlainText T.Text where
@@ -247,22 +265,40 @@ instance ToResponseBody PlainText T.Text where
 instance FromResponseBody PlainText T.Text where
   fromResponseBody _ _ = return . TE.decodeUtf8 . BL.toStrict
 
-data ChooseContentType a b = a :<|> b deriving Lift
+data ChooseResponseType a b = a :<|> b deriving Lift
 
-instance (ContentType a, ContentType b) => ContentType (ChooseContentType a b) where
+instance (HasStatusCodes a, HasStatusCodes b) => HasStatusCodes (ChooseResponseType a b) where
+  statusCodes (a :<|> b) = statusCodes a ++ statusCodes b
+
+instance (HasContentTypes a, HasContentTypes b) => HasContentTypes (ChooseResponseType a b) where
   contentTypes (a :<|> b) = contentTypes a <> contentTypes b
 
-instance (ToResponseBody a resObj, ToResponseBody b resObj, Typeable resObj) => ToResponseBody (ChooseContentType a b) resObj where
+instance (ToResponseBody a resObj, ToResponseBody b resObj, Typeable resObj) => ToResponseBody (ChooseResponseType a b) resObj where
   toResponseBody mediaType (a :<|> b) resObj
     | mediaType `F.elem` contentTypes a = toResponseBody mediaType a resObj
     | mediaType `F.elem` contentTypes b = toResponseBody mediaType b resObj
     | otherwise = fail "No suitable media type"
 
-instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseBody (ChooseContentType a b) resObj where
+instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseBody (ChooseResponseType a b) resObj where
   fromResponseBody mediaType (a :<|> b) bs
     | mediaType `F.elem` contentTypes a = fromResponseBody mediaType a bs
     | mediaType `F.elem` contentTypes b = fromResponseBody mediaType b bs
     | otherwise = fail "No suitable media type" -- Perhaps should improve this error message.
+
+data WithStatus resTyp = WithStatus !Status !resTyp deriving (Eq, Show)
+
+-- NOTE: Current implementation has a problem that for example `WithStatus 404 (WithStatus 500 PlainText)` ignores 500. But I'll ignore the problem
+instance HasStatusCodes (WithStatus resTyp) where
+  statusCodes (WithStatus st _resTyp) = [st]
+
+instance HasContentTypes resTyp => HasContentTypes (WithStatus resTyp) where
+  contentTypes (WithStatus _st resTyp) = contentTypes resTyp
+
+instance ToResponseBody resTyp resObj => ToResponseBody (WithStatus resTyp) resObj where
+  toResponseBody mediaType (WithStatus _st resTyp) resObj = toResponseBody mediaType resTyp resObj
+
+instance FromResponseBody resTyp resObj => FromResponseBody (WithStatus resTyp) resObj where
+  fromResponseBody mediaType (WithStatus _st resTyp) bs = fromResponseBody mediaType resTyp bs
 
 
 getResponseObjectType :: (a -> IO (Response resObj)) -> Proxy resObj
@@ -270,14 +306,14 @@ getResponseObjectType _ = Proxy
 
 
 handler
-  :: forall a ctype resObj. (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
-  => String -> Method -> RoutingTable a -> ctype -> (a -> IO (Response resObj)) -> Handler
+  :: forall a resTyp resObj. (Typeable a, HasContentTypes resTyp, ToResponseBody resTyp resObj, FromResponseBody resTyp resObj)
+  => String -> Method -> RoutingTable a -> resTyp -> (a -> IO (Response resObj)) -> Handler
 handler = Handler
 
 
 get, post, put, delete, patch
-  :: forall a ctype resObj. (Typeable a, ContentType ctype, ToResponseBody ctype resObj, FromResponseBody ctype resObj)
-  => String -> RoutingTable a -> ctype -> (a -> IO (Response resObj)) -> Handler
+  :: forall a resTyp resObj. (Typeable a, HasContentTypes resTyp, ToResponseBody resTyp resObj, FromResponseBody resTyp resObj)
+  => String -> RoutingTable a -> resTyp -> (a -> IO (Response resObj)) -> Handler
 get name    = handler name methodGet
 post name   = handler name methodPost
 put name    = handler name methodPut
@@ -304,17 +340,17 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
 
 
 runHandler :: Handler -> Request -> Maybe (IO Wai.Response)
-runHandler (Handler _name method tbl ctype hdl) req =
+runHandler (Handler _name method tbl resTyp hdl) req =
   act <$> runRoutingTable tbl req
  where
   act x =
     if method == requestMethod req
       then do
-        let mMime = matchAccept (NE.toList (contentTypes ctype)) acceptHeader
+        let mMime = matchAccept (NE.toList (contentTypes resTyp)) acceptHeader
         case mMime of
             Just mime -> do
               Response mst resObj <- hdl x
-              resBody <- toResponseBody mime ctype resObj
+              resBody <- toResponseBody mime resTyp resObj
               let statusCode =
                     case mst of
                         Just st -> st
