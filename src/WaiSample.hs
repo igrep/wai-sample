@@ -265,7 +265,7 @@ instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseB
     | otherwise = fail "No suitable media type" -- Perhaps should improve this error message.
 
 
-getResponseObjectType :: (a -> IO (Response resObj)) -> Proxy (Response resObj)
+getResponseObjectType :: (a -> IO (Response resObj)) -> Proxy resObj
 getResponseObjectType _ = Proxy
 
 
