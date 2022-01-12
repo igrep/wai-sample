@@ -113,7 +113,7 @@ addHeader r h = r { WaiI.requestHeaders = h : WaiI.requestHeaders r }
 
 
 withWaiApp :: Wai.Application -> (Wai.Application -> IO ()) -> IO ()
-withWaiApp app body = body app
+withWaiApp app action = action app
 
 
 runStateTClientState :: Session () -> ReaderT Wai.Application IO ()
