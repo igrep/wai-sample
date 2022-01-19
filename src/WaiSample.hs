@@ -7,6 +7,7 @@
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TemplateHaskell           #-}
 
 module WaiSample
   ( sampleApp
@@ -38,7 +39,7 @@ module WaiSample
   , Json (..)
   , FormUrlEncoded (..)
   , PlainText (..)
-  , ChooseContentType (..)
+  , ChooseResponseType (..)
   , getRoutingTableType
   , getResponseObjectType
   , showRoutes
@@ -50,6 +51,7 @@ import           Control.Exception           (bracket_)
 import           Data.Aeson                  (FromJSON, ToJSON)
 import qualified Data.Aeson                  as Json
 import qualified Data.Attoparsec.Text        as AT
+import qualified Data.ByteString.Char8       as B
 import qualified Data.ByteString.Lazy.Char8  as BL
 import qualified Data.Foldable               as F
 import           Data.Functor                (void)
@@ -63,16 +65,17 @@ import qualified Data.Text.Encoding          as TE
 import qualified Data.Text.IO                as TIO
 import           Data.Typeable               (Typeable)
 import           GHC.Generics                (Generic)
-import           Language.Haskell.TH.Syntax  (Lift)
+import           Language.Haskell.TH.Syntax  (Lift, liftTyped)
 import           Network.HTTP.Media          (MediaType, matchAccept,
                                               renderHeader, (//), (/:))
 import           Network.HTTP.Types.Header   (hContentType)
 import           Network.HTTP.Types.Method   (Method, methodDelete, methodGet,
                                               methodPatch, methodPost,
                                               methodPut)
-import           Network.HTTP.Types.Status   (Status, status200, status201,
+import           Network.HTTP.Types.Status   (mkStatus, status200, status201,
                                               status404, status405, status406,
                                               status500)
+import qualified Network.HTTP.Types.Status as HTS
 import           Network.Wai                 (Application, Request (requestHeaders, requestMethod),
                                               pathInfo, responseLBS)
 import qualified Network.Wai                 as Wai
@@ -208,13 +211,13 @@ data Handler where
     => String -> Method -> RoutingTable a -> resTyp -> (a -> IO (Response resObj)) -> Handler
 
 data Response resObj = Response
-  { statusCode :: !(Maybe Status)
+  { statusCode :: !(Maybe HTS.Status)
   , bodyObj    :: !resObj
   } deriving (Show, Eq)
   -- TODO: Add other header etc.
 
 class HasStatusCodes resTyp where
-  statusCodes :: resTyp -> [Status]
+  statusCodes :: resTyp -> [HTS.Status]
   statusCodes _ = []
 
 class Lift resTyp => HasContentTypes resTyp where
@@ -285,7 +288,13 @@ instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseB
     | mediaType `F.elem` contentTypes b = fromResponseBody mediaType b bs
     | otherwise = fail "No suitable media type" -- Perhaps should improve this error message.
 
-data WithStatus resTyp = WithStatus !Status !resTyp deriving (Eq, Show)
+data WithStatus resTyp = WithStatus HTS.Status resTyp deriving (Eq, Show)
+
+instance Lift resTyp => Lift (WithStatus resTyp) where
+  liftTyped (WithStatus st resTyp) = [|| WithStatus $$(liftedStatus) resTyp ||]
+   where
+    liftedStatus = [|| mkStatus $$(liftTyped $ HTS.statusCode st) (B.pack stMsg) ||]
+    stMsg = B.unpack $ HTS.statusMessage st
 
 -- NOTE: Current implementation has a problem that for example `WithStatus 404 (WithStatus 500 PlainText)` ignores 500. But I'll ignore the problem
 instance HasStatusCodes (WithStatus resTyp) where
@@ -306,13 +315,25 @@ getResponseObjectType _ = Proxy
 
 
 handler
-  :: forall a resTyp resObj. (Typeable a, HasContentTypes resTyp, ToResponseBody resTyp resObj, FromResponseBody resTyp resObj)
+  :: forall a resTyp resObj.
+  ( Typeable a
+  , HasContentTypes resTyp
+  , HasStatusCodes resTyp
+  , ToResponseBody resTyp resObj
+  , FromResponseBody resTyp resObj
+  )
   => String -> Method -> RoutingTable a -> resTyp -> (a -> IO (Response resObj)) -> Handler
 handler = Handler
 
 
 get, post, put, delete, patch
-  :: forall a resTyp resObj. (Typeable a, HasContentTypes resTyp, ToResponseBody resTyp resObj, FromResponseBody resTyp resObj)
+  :: forall a resTyp resObj.
+  ( Typeable a
+  , HasContentTypes resTyp
+  , HasStatusCodes resTyp
+  , ToResponseBody resTyp resObj
+  , FromResponseBody resTyp resObj
+  )
   => String -> RoutingTable a -> resTyp -> (a -> IO (Response resObj)) -> Handler
 get name    = handler name methodGet
 post name   = handler name methodPost
@@ -325,7 +346,7 @@ body :: resObj -> Response resObj
 body = Response Nothing
 
 
-status :: Status -> Response resObj -> Response resObj
+status :: HTS.Status -> Response resObj -> Response resObj
 status newSt (Response _oldSt b) = Response (Just newSt) b
 
 
@@ -351,12 +372,12 @@ runHandler (Handler _name method tbl resTyp hdl) req =
             Just mime -> do
               Response mst resObj <- hdl x
               resBody <- toResponseBody mime resTyp resObj
-              let statusCode =
+              let stC =
                     case mst of
                         Just st -> st
                         Nothing ->
                           if method == methodPost then status201 else status200
-              return $ responseLBS statusCode [(hContentType, renderHeader mime)] resBody
+              return $ responseLBS stC [(hContentType, renderHeader mime)] resBody
             Nothing ->
               return $ responseLBS status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable"
       else return $ responseLBS status405 [(hContentType, "text/plain;charset=UTF-8")] "405 Method not allowed."
