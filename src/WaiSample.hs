@@ -29,8 +29,6 @@ module WaiSample
   , patch
 
   , Response (..)
-  , body
-  , status
 
   , RoutingTable (..)
   , HasContentTypes (..)
@@ -97,21 +95,21 @@ runSampleApp = runEnv 8020 sampleApp
 sampleRoutes :: [Handler]
 sampleRoutes =
   -- get "index" root (WithStatus status505 Json :<|> WithStatus status500 PlainText)) (\_ -> return $ body (Right "index" :: Either Error T.Text))
-  [ get "index" root (WithStatus status500 PlainText) (\_ -> return $ body ("index" :: T.Text))
-  , get "aboutUs" (path "about/us") PlainText (\_ -> return $ body ("About IIJ" :: T.Text))
-  , get "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return $ body ("Financial Report 2021" :: T.Text))
-  , get "aboutFinance" (path "about/finance") PlainText (\_ -> return $ body ("Financial Report 2020 /" :: T.Text))
+  [ get "index" root (WithStatus Status500 PlainText) (\_ -> return ("index" :: T.Text))
+  , get "aboutUs" (path "about/us") PlainText (\_ -> return ("About IIJ" :: T.Text))
+  , get "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return ("Financial Report 2021" :: T.Text))
+  , get "aboutFinance" (path "about/finance") PlainText (\_ -> return ("Financial Report 2020 /" :: T.Text))
   -- TODO: Drop the initial slash?
-  , get "aboutFinanceImpossible" (path "/about/finance/impossible") PlainText (\_ -> (fail "This should not be executed due to the leading slash" :: IO (Response T.Text)))
+  , get "aboutFinanceImpossible" (path "/about/finance/impossible") PlainText (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
   , get "customerId"
       (path "customer/" *> decimalPiece)
       (Json :<|> FormUrlEncoded)
-      (return . body . customerOfId)
+      (return . customerOfId)
   , get "customerIdJson"
     -- /customer/:id.json
     (path "customer/" *> decimalPiece <* path ".json")
     Json
-    (return . body . customerOfId)
+    (return . customerOfId)
   , get "customerTransaction"
     ( do
         path "customer/"
@@ -122,12 +120,12 @@ sampleRoutes =
       )
     PlainText
     (\(cId, transactionName) ->
-      return . body $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
+      return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
       )
   , post "createProduct"
       (path "products")
       PlainText
-      (\_ -> return $ body ("Product created" :: T.Text))
+      (\_ -> return ("Product created" :: T.Text))
   ]
  where
   customerOfId i =
@@ -203,20 +201,46 @@ data Handler where
   Handler
     ::
      ( Typeable a
-     , HasStatusCodes resTyp
+     , HasStatusCode resTyp resObj
      , HasContentTypes resTyp
      , ToResponseBody resTyp resObj
      , FromResponseBody resTyp resObj
      )
-    => String -> Method -> RoutingTable a -> resTyp -> (a -> IO (Response resObj)) -> Handler
+    => String -> Method -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
+    --                                                          ^^^^^^
+    --                                                          Text
+    --                                                      (Response Status404 Text)
 
-data Response resObj = Response
-  { statusCode :: !(Maybe HTS.Status)
-  , bodyObj    :: !resObj
+data Response status resObj = Response
+  { statusCode :: status
+  , bodyObj    :: resObj
   } deriving (Show, Eq)
   -- TODO: Add other header etc.
 
-class HasStatusCodes resTyp where
+data SomeResponse resTyp where
+  SomeResponse :: HasStatusCode resTyp resObj => resObj -> SomeResponse resTyp
+
+data DefaultStatus = DefaultStatus deriving (Show, Eq, Lift)
+
+class IsStatusCode status where
+  toStatusCode :: status -> HTS.Status
+
+data Status200 = Status200 deriving (Show, Eq, Lift)
+
+instance IsStatusCode Status200 where
+  toStatusCode _ = HTS.status200
+
+data Status400 = Status400 deriving (Show, Eq, Lift)
+
+instance IsStatusCode Status400 where
+  toStatusCode _ = HTS.status400
+
+data Status500 = Status500 deriving (Show, Eq, Lift)
+
+instance IsStatusCode Status500 where
+  toStatusCode _ = HTS.status500
+
+class HasStatusCode resTyp resObj where
   statusCodes :: resTyp -> [HTS.Status]
   statusCodes _ = []
 
@@ -231,7 +255,7 @@ class (HasContentTypes resTyp, Typeable resObj) => FromResponseBody resTyp resOb
 
 data Json = Json deriving Lift
 
-instance HasStatusCodes Json
+instance HasStatusCode Json resObj
 
 instance HasContentTypes Json where
   contentTypes _ = "application" // "json" :| []
@@ -244,7 +268,7 @@ instance (FromJSON resObj, Typeable resObj) => FromResponseBody Json resObj wher
 
 data FormUrlEncoded = FormUrlEncoded deriving Lift
 
-instance HasStatusCodes FormUrlEncoded
+instance HasStatusCode FormUrlEncoded resObj
 
 instance HasContentTypes FormUrlEncoded where
   contentTypes _ = "application" // "x-www-form-urlencoded" :| []
@@ -257,7 +281,7 @@ instance (FromForm resObj, Typeable resObj) => FromResponseBody FormUrlEncoded r
 
 data PlainText = PlainText deriving Lift
 
-instance HasStatusCodes PlainText
+instance HasStatusCode PlainText DefaultStatus
 
 instance HasContentTypes PlainText where
   contentTypes _ = "text" // "plain" /: ("charset", "UTF-8") :| []
@@ -270,8 +294,8 @@ instance FromResponseBody PlainText T.Text where
 
 data ChooseResponseType a b = a :<|> b deriving Lift
 
-instance (HasStatusCodes a, HasStatusCodes b) => HasStatusCodes (ChooseResponseType a b) where
-  statusCodes (a :<|> b) = statusCodes a ++ statusCodes b
+--instance (HasStatusCode a resA, HasStatusCode b resB) => HasStatusCode (ChooseResponseType a b) where
+  --statusCodes (a :<|> b) = statusCodes a ++ statusCodes b
 
 instance (HasContentTypes a, HasContentTypes b) => HasContentTypes (ChooseResponseType a b) where
   contentTypes (a :<|> b) = contentTypes a <> contentTypes b
@@ -288,29 +312,29 @@ instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseB
     | mediaType `F.elem` contentTypes b = fromResponseBody mediaType b bs
     | otherwise = fail "No suitable media type" -- Perhaps should improve this error message.
 
-data WithStatus resTyp = WithStatus HTS.Status resTyp deriving (Eq, Show)
+data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show)
 
-instance Lift resTyp => Lift (WithStatus resTyp) where
+instance (Lift status, Lift resTyp) => Lift (WithStatus status resTyp) where
   liftTyped (WithStatus st resTyp) = [|| WithStatus $$(liftedStatus) resTyp ||]
    where
     liftedStatus = [|| mkStatus $$(liftTyped $ HTS.statusCode st) (B.pack stMsg) ||]
     stMsg = B.unpack $ HTS.statusMessage st
 
 -- NOTE: Current implementation has a problem that for example `WithStatus 404 (WithStatus 500 PlainText)` ignores 500. But I'll ignore the problem
-instance HasStatusCodes (WithStatus resTyp) where
-  statusCodes (WithStatus st _resTyp) = [st]
+instance IsStatusCode status => HasStatusCode (WithStatus status resTyp) (SomeResponse resTyp) where
+  statusCodes (WithStatus st _resTyp) = [toStatusCode st]
 
-instance HasContentTypes resTyp => HasContentTypes (WithStatus resTyp) where
+instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus status resTyp) where
   contentTypes (WithStatus _st resTyp) = contentTypes resTyp
 
-instance ToResponseBody resTyp resObj => ToResponseBody (WithStatus resTyp) resObj where
+instance (Lift status, ToResponseBody resTyp resObj) => ToResponseBody (WithStatus status resTyp) resObj where
   toResponseBody mediaType (WithStatus _st resTyp) resObj = toResponseBody mediaType resTyp resObj
 
-instance FromResponseBody resTyp resObj => FromResponseBody (WithStatus resTyp) resObj where
+instance (Lift status, FromResponseBody resTyp resObj) => FromResponseBody (WithStatus status resTyp) resObj where
   fromResponseBody mediaType (WithStatus _st resTyp) bs = fromResponseBody mediaType resTyp bs
 
 
-getResponseObjectType :: (a -> IO (Response resObj)) -> Proxy resObj
+getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
 getResponseObjectType _ = Proxy
 
 
@@ -318,11 +342,11 @@ handler
   :: forall a resTyp resObj.
   ( Typeable a
   , HasContentTypes resTyp
-  , HasStatusCodes resTyp
+  , HasStatusCode resTyp resObj
   , ToResponseBody resTyp resObj
   , FromResponseBody resTyp resObj
   )
-  => String -> Method -> RoutingTable a -> resTyp -> (a -> IO (Response resObj)) -> Handler
+  => String -> Method -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
 handler = Handler
 
 
@@ -330,24 +354,16 @@ get, post, put, delete, patch
   :: forall a resTyp resObj.
   ( Typeable a
   , HasContentTypes resTyp
-  , HasStatusCodes resTyp
+  , HasStatusCode resTyp resObj
   , ToResponseBody resTyp resObj
   , FromResponseBody resTyp resObj
   )
-  => String -> RoutingTable a -> resTyp -> (a -> IO (Response resObj)) -> Handler
+  => String -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
 get name    = handler name methodGet
 post name   = handler name methodPost
 put name    = handler name methodPut
 delete name = handler name methodDelete
 patch name  = handler name methodPatch
-
-
-body :: resObj -> Response resObj
-body = Response Nothing
-
-
-status :: HTS.Status -> Response resObj -> Response resObj
-status newSt (Response _oldSt b) = Response (Just newSt) b
 
 
 handles :: [Handler] -> Application
