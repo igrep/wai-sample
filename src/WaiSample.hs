@@ -7,7 +7,6 @@
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TemplateHaskell           #-}
 
 module WaiSample
   ( sampleApp
@@ -29,10 +28,11 @@ module WaiSample
   , patch
 
   , Response (..)
+  , SomeResponse (..)
 
   , RoutingTable (..)
   , HasContentTypes (..)
-  , ToResponseBody (..)
+  , ToRawResponse (..)
   , FromResponseBody (..)
   , Json (..)
   , FormUrlEncoded (..)
@@ -49,7 +49,6 @@ import           Control.Exception           (bracket_)
 import           Data.Aeson                  (FromJSON, ToJSON)
 import qualified Data.Aeson                  as Json
 import qualified Data.Attoparsec.Text        as AT
-import qualified Data.ByteString.Char8       as B
 import qualified Data.ByteString.Lazy.Char8  as BL
 import qualified Data.Foldable               as F
 import           Data.Functor                (void)
@@ -63,17 +62,16 @@ import qualified Data.Text.Encoding          as TE
 import qualified Data.Text.IO                as TIO
 import           Data.Typeable               (Typeable)
 import           GHC.Generics                (Generic)
-import           Language.Haskell.TH.Syntax  (Lift, liftTyped)
+import           Language.Haskell.TH.Syntax  (Lift)
 import           Network.HTTP.Media          (MediaType, matchAccept,
                                               renderHeader, (//), (/:))
 import           Network.HTTP.Types.Header   (hContentType)
 import           Network.HTTP.Types.Method   (Method, methodDelete, methodGet,
                                               methodPatch, methodPost,
                                               methodPut)
-import           Network.HTTP.Types.Status   (mkStatus, status200, status201,
-                                              status404, status405, status406,
-                                              status500)
-import qualified Network.HTTP.Types.Status as HTS
+import           Network.HTTP.Types.Status   (status200, status201, status404,
+                                              status405, status406)
+import qualified Network.HTTP.Types.Status   as HTS
 import           Network.Wai                 (Application, Request (requestHeaders, requestMethod),
                                               pathInfo, responseLBS)
 import qualified Network.Wai                 as Wai
@@ -95,7 +93,8 @@ runSampleApp = runEnv 8020 sampleApp
 sampleRoutes :: [Handler]
 sampleRoutes =
   -- get "index" root (WithStatus status505 Json :<|> WithStatus status500 PlainText)) (\_ -> return $ body (Right "index" :: Either Error T.Text))
-  [ get "index" root (WithStatus Status500 PlainText) (\_ -> return ("index" :: T.Text))
+  [ get "index" root PlainText (\_ -> return ("index" :: T.Text))
+  , get "maintenance" (path "maintenance") (WithStatus Status503 PlainText) (\_ -> return ("Sorry, we are under maintenance" :: T.Text))
   , get "aboutUs" (path "about/us") PlainText (\_ -> return ("About IIJ" :: T.Text))
   , get "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return ("Financial Report 2021" :: T.Text))
   , get "aboutFinance" (path "about/finance") PlainText (\_ -> return ("Financial Report 2020 /" :: T.Text))
@@ -201,9 +200,9 @@ data Handler where
   Handler
     ::
      ( Typeable a
-     , HasStatusCode resTyp resObj
-     , HasContentTypes resTyp
-     , ToResponseBody resTyp resObj
+     , HasStatusCode resTyp -- TODO: Remove?
+     , HasContentTypes resTyp -- TODO: Remove?
+     , ToRawResponse resTyp resObj
      , FromResponseBody resTyp resObj
      )
     => String -> Method -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
@@ -217,8 +216,17 @@ data Response status resObj = Response
   } deriving (Show, Eq)
   -- TODO: Add other header etc.
 
+data RawResponse = RawResponse
+  { rawStatusCode :: Maybe HTS.Status
+  , rawBody       :: BL.ByteString
+  } deriving (Show, Eq)
+
+defaultRawResponse :: BL.ByteString -> RawResponse
+defaultRawResponse = RawResponse Nothing
+
+
 data SomeResponse resTyp where
-  SomeResponse :: HasStatusCode resTyp resObj => resObj -> SomeResponse resTyp
+  SomeResponse :: (ToRawResponse resTyp resObj, FromResponseBody resTyp resObj) => resObj -> SomeResponse resTyp
 
 data DefaultStatus = DefaultStatus deriving (Show, Eq, Lift)
 
@@ -240,70 +248,75 @@ data Status500 = Status500 deriving (Show, Eq, Lift)
 instance IsStatusCode Status500 where
   toStatusCode _ = HTS.status500
 
-class HasStatusCode resTyp resObj where
+data Status503 = Status503 deriving (Show, Eq, Lift)
+
+instance IsStatusCode Status503 where
+  toStatusCode _ = HTS.status503
+
+class HasStatusCode resTyp where
   statusCodes :: resTyp -> [HTS.Status]
   statusCodes _ = []
 
 class Lift resTyp => HasContentTypes resTyp where
   contentTypes :: resTyp -> NE.NonEmpty MediaType
 
-class (HasContentTypes resTyp, Typeable resObj) => ToResponseBody resTyp resObj where
-  toResponseBody :: MediaType -> resTyp -> resObj -> IO BL.ByteString
+class (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => ToRawResponse resTyp resObj where
+  toRawResponse :: MediaType -> resTyp -> resObj -> IO RawResponse
 
-class (HasContentTypes resTyp, Typeable resObj) => FromResponseBody resTyp resObj where
+class (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => FromResponseBody resTyp resObj where
   fromResponseBody :: MediaType -> resTyp -> BL.ByteString -> IO resObj
 
 data Json = Json deriving Lift
 
-instance HasStatusCode Json resObj
+instance HasStatusCode Json
 
 instance HasContentTypes Json where
   contentTypes _ = "application" // "json" :| []
 
-instance (ToJSON resObj, Typeable resObj) => ToResponseBody Json resObj where
-  toResponseBody _ _ = return . Json.encode
+instance (ToJSON resObj, Typeable resObj) => ToRawResponse Json resObj where
+  toRawResponse _ _ = return . defaultRawResponse . Json.encode
 
 instance (FromJSON resObj, Typeable resObj) => FromResponseBody Json resObj where
   fromResponseBody _ _ = either fail return . Json.eitherDecode'
 
 data FormUrlEncoded = FormUrlEncoded deriving Lift
 
-instance HasStatusCode FormUrlEncoded resObj
+instance HasStatusCode FormUrlEncoded
 
 instance HasContentTypes FormUrlEncoded where
   contentTypes _ = "application" // "x-www-form-urlencoded" :| []
 
-instance (ToForm resObj, Typeable resObj) => ToResponseBody FormUrlEncoded resObj where
-  toResponseBody _ _ = return . urlEncodeAsForm
+instance (ToForm resObj, Typeable resObj) => ToRawResponse FormUrlEncoded resObj where
+  toRawResponse _ _ = return . defaultRawResponse . urlEncodeAsForm
 
 instance (FromForm resObj, Typeable resObj) => FromResponseBody FormUrlEncoded resObj where
   fromResponseBody _ _ = either (fail . T.unpack) return . urlDecodeAsForm
 
 data PlainText = PlainText deriving Lift
 
-instance HasStatusCode PlainText DefaultStatus
+instance HasStatusCode PlainText
 
 instance HasContentTypes PlainText where
   contentTypes _ = "text" // "plain" /: ("charset", "UTF-8") :| []
 
-instance ToResponseBody PlainText T.Text where
-  toResponseBody _ _ = return . BL.fromStrict . TE.encodeUtf8
+instance ToRawResponse PlainText T.Text where
+  toRawResponse _ _ = return . defaultRawResponse . BL.fromStrict . TE.encodeUtf8
 
 instance FromResponseBody PlainText T.Text where
   fromResponseBody _ _ = return . TE.decodeUtf8 . BL.toStrict
 
 data ChooseResponseType a b = a :<|> b deriving Lift
 
---instance (HasStatusCode a resA, HasStatusCode b resB) => HasStatusCode (ChooseResponseType a b) where
-  --statusCodes (a :<|> b) = statusCodes a ++ statusCodes b
+instance (HasStatusCode a, HasStatusCode b) => HasStatusCode (ChooseResponseType a b) where
+  statusCodes (a :<|> b) = statusCodes a ++ statusCodes b
 
 instance (HasContentTypes a, HasContentTypes b) => HasContentTypes (ChooseResponseType a b) where
   contentTypes (a :<|> b) = contentTypes a <> contentTypes b
 
-instance (ToResponseBody a resObj, ToResponseBody b resObj, Typeable resObj) => ToResponseBody (ChooseResponseType a b) resObj where
-  toResponseBody mediaType (a :<|> b) resObj
-    | mediaType `F.elem` contentTypes a = toResponseBody mediaType a resObj
-    | mediaType `F.elem` contentTypes b = toResponseBody mediaType b resObj
+instance (ToRawResponse a resObj, ToRawResponse b resObj, Typeable resObj) => ToRawResponse (ChooseResponseType a b) resObj where
+  toRawResponse mediaType (a :<|> b) resObj
+    | mediaType `F.elem` contentTypes a = toRawResponse mediaType a resObj
+    | mediaType `F.elem` contentTypes b = toRawResponse mediaType b resObj
     | otherwise = fail "No suitable media type"
 
 instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseBody (ChooseResponseType a b) resObj where
@@ -312,25 +325,19 @@ instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseB
     | mediaType `F.elem` contentTypes b = fromResponseBody mediaType b bs
     | otherwise = fail "No suitable media type" -- Perhaps should improve this error message.
 
-data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show)
-
-instance (Lift status, Lift resTyp) => Lift (WithStatus status resTyp) where
-  liftTyped (WithStatus st resTyp) = [|| WithStatus $$(liftedStatus) resTyp ||]
-   where
-    liftedStatus = [|| mkStatus $$(liftTyped $ HTS.statusCode st) (B.pack stMsg) ||]
-    stMsg = B.unpack $ HTS.statusMessage st
+data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)
 
 -- NOTE: Current implementation has a problem that for example `WithStatus 404 (WithStatus 500 PlainText)` ignores 500. But I'll ignore the problem
-instance IsStatusCode status => HasStatusCode (WithStatus status resTyp) (SomeResponse resTyp) where
+instance IsStatusCode status => HasStatusCode (WithStatus status resTyp) where
   statusCodes (WithStatus st _resTyp) = [toStatusCode st]
 
 instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus status resTyp) where
   contentTypes (WithStatus _st resTyp) = contentTypes resTyp
 
-instance (Lift status, ToResponseBody resTyp resObj) => ToResponseBody (WithStatus status resTyp) resObj where
-  toResponseBody mediaType (WithStatus _st resTyp) resObj = toResponseBody mediaType resTyp resObj
+instance (Lift status, IsStatusCode status, ToRawResponse resTyp resObj) => ToRawResponse (WithStatus status resTyp) resObj where
+  toRawResponse mediaType (WithStatus _st resTyp) resObj = toRawResponse mediaType resTyp resObj
 
-instance (Lift status, FromResponseBody resTyp resObj) => FromResponseBody (WithStatus status resTyp) resObj where
+instance (Lift status, IsStatusCode status, FromResponseBody resTyp resObj) => FromResponseBody (WithStatus status resTyp) resObj where
   fromResponseBody mediaType (WithStatus _st resTyp) bs = fromResponseBody mediaType resTyp bs
 
 
@@ -342,8 +349,8 @@ handler
   :: forall a resTyp resObj.
   ( Typeable a
   , HasContentTypes resTyp
-  , HasStatusCode resTyp resObj
-  , ToResponseBody resTyp resObj
+  , HasStatusCode resTyp
+  , ToRawResponse resTyp resObj
   , FromResponseBody resTyp resObj
   )
   => String -> Method -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
@@ -354,8 +361,8 @@ get, post, put, delete, patch
   :: forall a resTyp resObj.
   ( Typeable a
   , HasContentTypes resTyp
-  , HasStatusCode resTyp resObj
-  , ToResponseBody resTyp resObj
+  , HasStatusCode resTyp
+  , ToRawResponse resTyp resObj
   , FromResponseBody resTyp resObj
   )
   => String -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
@@ -386,14 +393,15 @@ runHandler (Handler _name method tbl resTyp hdl) req =
         let mMime = matchAccept (NE.toList (contentTypes resTyp)) acceptHeader
         case mMime of
             Just mime -> do
-              Response mst resObj <- hdl x
-              resBody <- toResponseBody mime resTyp resObj
-              let stC =
+              resObj <- hdl x
+              rawRes <- toRawResponse mime resTyp resObj
+              let mst = rawStatusCode rawRes
+                  stC =
                     case mst of
                         Just st -> st
                         Nothing ->
                           if method == methodPost then status201 else status200
-              return $ responseLBS stC [(hContentType, renderHeader mime)] resBody
+              return . responseLBS stC [(hContentType, renderHeader mime)] $ rawBody rawRes
             Nothing ->
               return $ responseLBS status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable"
       else return $ responseLBS status405 [(hContentType, "text/plain;charset=UTF-8")] "405 Method not allowed."

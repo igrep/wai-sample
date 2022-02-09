@@ -29,6 +29,13 @@ spec =
       assertBody "index" res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
+    it "GET /maintenance returns 503" . runStateTClientState $ do
+      let req = defaultRequest `setPath` "/maintenance"
+      res <- request req
+      assertStatus 503 res
+      assertBody "Sorry, we are under maintenance" res
+      assertHeader "Content-Type" "text/plain;charset=UTF-8" res
+
     it "GET /about/us is available" . runStateTClientState $ do
       let req = defaultRequest `setPath` "/about/us"
       res <- request req
