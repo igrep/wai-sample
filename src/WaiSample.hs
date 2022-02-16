@@ -33,7 +33,7 @@ module WaiSample
   , RoutingTable (..)
   , HasContentTypes (..)
   , ToRawResponse (..)
-  , FromResponseBody (..)
+  , FromRawResponse (..)
   , Json (..)
   , FormUrlEncoded (..)
   , PlainText (..)
@@ -94,7 +94,9 @@ sampleRoutes :: [Handler]
 sampleRoutes =
   -- get "index" root (WithStatus status505 Json :<|> WithStatus status500 PlainText)) (\_ -> return $ body (Right "index" :: Either Error T.Text))
   [ get "index" root PlainText (\_ -> return ("index" :: T.Text))
-  , get "maintenance" (path "maintenance") (WithStatus Status503 PlainText) (\_ -> return ("Sorry, we are under maintenance" :: T.Text))
+  , get "maintenance" (path "maintenance")
+      (WithStatus Status503 PlainText)
+      (\_ -> return $ Response Status503 ("Sorry, we are under maintenance" :: T.Text))
   , get "aboutUs" (path "about/us") PlainText (\_ -> return ("About IIJ" :: T.Text))
   , get "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return ("Financial Report 2021" :: T.Text))
   , get "aboutFinance" (path "about/finance") PlainText (\_ -> return ("Financial Report 2020 /" :: T.Text))
@@ -203,7 +205,7 @@ data Handler where
      , HasStatusCode resTyp -- TODO: Remove?
      , HasContentTypes resTyp -- TODO: Remove?
      , ToRawResponse resTyp resObj
-     , FromResponseBody resTyp resObj
+     , FromRawResponse resTyp resObj
      )
     => String -> Method -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
     --                                                          ^^^^^^
@@ -226,32 +228,37 @@ defaultRawResponse = RawResponse Nothing
 
 
 data SomeResponse resTyp where
-  SomeResponse :: (ToRawResponse resTyp resObj, FromResponseBody resTyp resObj) => resObj -> SomeResponse resTyp
+  SomeResponse :: (ToRawResponse resTyp resObj, FromRawResponse resTyp resObj) => resObj -> SomeResponse resTyp
 
 data DefaultStatus = DefaultStatus deriving (Show, Eq, Lift)
 
 class IsStatusCode status where
   toStatusCode :: status -> HTS.Status
+  fromStatusCode :: HTS.Status -> Maybe status
 
 data Status200 = Status200 deriving (Show, Eq, Lift)
 
 instance IsStatusCode Status200 where
   toStatusCode _ = HTS.status200
+  fromStatusCode st = if st == HTS.status200 then Just Status200 else Nothing
 
 data Status400 = Status400 deriving (Show, Eq, Lift)
 
 instance IsStatusCode Status400 where
   toStatusCode _ = HTS.status400
+  fromStatusCode st = if st == HTS.status400 then Just Status400 else Nothing
 
 data Status500 = Status500 deriving (Show, Eq, Lift)
 
 instance IsStatusCode Status500 where
   toStatusCode _ = HTS.status500
+  fromStatusCode st = if st == HTS.status500 then Just Status500 else Nothing
 
 data Status503 = Status503 deriving (Show, Eq, Lift)
 
 instance IsStatusCode Status503 where
   toStatusCode _ = HTS.status503
+  fromStatusCode st = if st == HTS.status503 then Just Status503 else Nothing
 
 class HasStatusCode resTyp where
   statusCodes :: resTyp -> [HTS.Status]
@@ -263,8 +270,8 @@ class Lift resTyp => HasContentTypes resTyp where
 class (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => ToRawResponse resTyp resObj where
   toRawResponse :: MediaType -> resTyp -> resObj -> IO RawResponse
 
-class (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => FromResponseBody resTyp resObj where
-  fromResponseBody :: MediaType -> resTyp -> BL.ByteString -> IO resObj
+class (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => FromRawResponse resTyp resObj where
+  fromRawResponse :: MediaType -> resTyp -> RawResponse -> IO resObj
 
 data Json = Json deriving Lift
 
@@ -276,8 +283,8 @@ instance HasContentTypes Json where
 instance (ToJSON resObj, Typeable resObj) => ToRawResponse Json resObj where
   toRawResponse _ _ = return . defaultRawResponse . Json.encode
 
-instance (FromJSON resObj, Typeable resObj) => FromResponseBody Json resObj where
-  fromResponseBody _ _ = either fail return . Json.eitherDecode'
+instance (FromJSON resObj, Typeable resObj) => FromRawResponse Json resObj where
+  fromRawResponse _ _ = either fail return . Json.eitherDecode' . rawBody
 
 data FormUrlEncoded = FormUrlEncoded deriving Lift
 
@@ -289,8 +296,8 @@ instance HasContentTypes FormUrlEncoded where
 instance (ToForm resObj, Typeable resObj) => ToRawResponse FormUrlEncoded resObj where
   toRawResponse _ _ = return . defaultRawResponse . urlEncodeAsForm
 
-instance (FromForm resObj, Typeable resObj) => FromResponseBody FormUrlEncoded resObj where
-  fromResponseBody _ _ = either (fail . T.unpack) return . urlDecodeAsForm
+instance (FromForm resObj, Typeable resObj) => FromRawResponse FormUrlEncoded resObj where
+  fromRawResponse _ _ = either (fail . T.unpack) return . urlDecodeAsForm . rawBody
 
 data PlainText = PlainText deriving Lift
 
@@ -302,8 +309,8 @@ instance HasContentTypes PlainText where
 instance ToRawResponse PlainText T.Text where
   toRawResponse _ _ = return . defaultRawResponse . BL.fromStrict . TE.encodeUtf8
 
-instance FromResponseBody PlainText T.Text where
-  fromResponseBody _ _ = return . TE.decodeUtf8 . BL.toStrict
+instance FromRawResponse PlainText T.Text where
+  fromRawResponse _ _ = return . TE.decodeUtf8 . BL.toStrict . rawBody
 
 data ChooseResponseType a b = a :<|> b deriving Lift
 
@@ -313,16 +320,31 @@ instance (HasStatusCode a, HasStatusCode b) => HasStatusCode (ChooseResponseType
 instance (HasContentTypes a, HasContentTypes b) => HasContentTypes (ChooseResponseType a b) where
   contentTypes (a :<|> b) = contentTypes a <> contentTypes b
 
+instance (Typeable status, IsStatusCode status, ToRawResponse resTyp resObj) => ToRawResponse resTyp (Response status resObj) where
+  toRawResponse mediaType resTyp res = do
+    rr <- toRawResponse mediaType resTyp (bodyObj res)
+    return $ RawResponse (Just (toStatusCode (statusCode res))) (rawBody rr)
+
+instance (Typeable status, IsStatusCode status, FromRawResponse resTyp resObj) => FromRawResponse resTyp (Response status resObj) where
+  -- fromRawResponse :: MediaType -> resTyp -> RawResponse -> IO resObj
+  fromRawResponse mediaType resTyp rr = do
+    resObj <- fromRawResponse mediaType resTyp rr
+    rawSt <- maybe (fail "Unexpected status code") return $ rawStatusCode rr
+    status <- maybe (fail "Unexpected status code") return $ fromStatusCode rawSt
+    return $ Response status resObj
+
+-- TODO: 実際のstatus codeに応じて結果を変える
 instance (ToRawResponse a resObj, ToRawResponse b resObj, Typeable resObj) => ToRawResponse (ChooseResponseType a b) resObj where
   toRawResponse mediaType (a :<|> b) resObj
     | mediaType `F.elem` contentTypes a = toRawResponse mediaType a resObj
     | mediaType `F.elem` contentTypes b = toRawResponse mediaType b resObj
     | otherwise = fail "No suitable media type"
 
-instance (FromResponseBody a resObj, FromResponseBody b resObj) => FromResponseBody (ChooseResponseType a b) resObj where
-  fromResponseBody mediaType (a :<|> b) bs
-    | mediaType `F.elem` contentTypes a = fromResponseBody mediaType a bs
-    | mediaType `F.elem` contentTypes b = fromResponseBody mediaType b bs
+-- TODO: 実際のstatus codeに応じて結果を変える
+instance (FromRawResponse a resObj, FromRawResponse b resObj) => FromRawResponse (ChooseResponseType a b) resObj where
+  fromRawResponse mediaType (a :<|> b) bs
+    | mediaType `F.elem` contentTypes a = fromRawResponse mediaType a bs
+    | mediaType `F.elem` contentTypes b = fromRawResponse mediaType b bs
     | otherwise = fail "No suitable media type" -- Perhaps should improve this error message.
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)
@@ -337,8 +359,8 @@ instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus st
 instance (Lift status, IsStatusCode status, ToRawResponse resTyp resObj) => ToRawResponse (WithStatus status resTyp) resObj where
   toRawResponse mediaType (WithStatus _st resTyp) resObj = toRawResponse mediaType resTyp resObj
 
-instance (Lift status, IsStatusCode status, FromResponseBody resTyp resObj) => FromResponseBody (WithStatus status resTyp) resObj where
-  fromResponseBody mediaType (WithStatus _st resTyp) bs = fromResponseBody mediaType resTyp bs
+instance (Lift status, IsStatusCode status, FromRawResponse resTyp resObj) => FromRawResponse (WithStatus status resTyp) resObj where
+  fromRawResponse mediaType (WithStatus _st resTyp) bs = fromRawResponse mediaType resTyp bs
 
 
 getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
@@ -351,7 +373,7 @@ handler
   , HasContentTypes resTyp
   , HasStatusCode resTyp
   , ToRawResponse resTyp resObj
-  , FromResponseBody resTyp resObj
+  , FromRawResponse resTyp resObj
   )
   => String -> Method -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
 handler = Handler
@@ -363,7 +385,7 @@ get, post, put, delete, patch
   , HasContentTypes resTyp
   , HasStatusCode resTyp
   , ToRawResponse resTyp resObj
-  , FromResponseBody resTyp resObj
+  , FromRawResponse resTyp resObj
   )
   => String -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
 get name    = handler name methodGet
