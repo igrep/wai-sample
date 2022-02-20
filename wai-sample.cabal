@@ -33,8 +33,15 @@ library
   import: common
   exposed-modules:
       WaiSample
+      WaiSample.Types
+      WaiSample.Server
       WaiSample.Client
       WaiSample.Client.Sample
+  other-modules:
+      WaiSample.Routes
+      WaiSample.Types.Response
+      WaiSample.Types.ContentTypes
+      WaiSample.Types.Status
   hs-source-dirs:
       src
   build-depends:
