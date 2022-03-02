@@ -8,12 +8,10 @@ import           Control.Error.Util        (hush)
 import           Control.Exception         (bracket_)
 import qualified Data.Attoparsec.Text      as AT
 import qualified Data.List                 as L
-import           Data.List.NonEmpty        (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty        as NE
 import           Data.Maybe                (fromMaybe, listToMaybe, mapMaybe)
 import qualified Data.Text                 as T
-import           Network.HTTP.Media        (MediaType, matchAccept,
-                                            renderHeader, (//), (/:))
+import           Network.HTTP.Media        (matchAccept, renderHeader)
 import           Network.HTTP.Types.Header (hContentType)
 import           Network.HTTP.Types.Method (methodPost)
 import qualified Network.HTTP.Types.Status as HTS

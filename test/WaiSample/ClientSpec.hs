@@ -11,9 +11,11 @@ import           Test.QuickCheck          (property)
 import           Test.Syd                 (Spec, aroundAll, describe,
                                            itWithOuter, shouldReturn)
 
-import           WaiSample                (Customer (..), sampleApp)
+import           WaiSample                (Customer (..), Response (..),
+                                           Status503 (..))
 import           WaiSample.Client         (httpConduitBackend)
 import           WaiSample.Client.Sample
+import           WaiSample.Server         (sampleApp)
 
 
 spec :: Spec
@@ -25,6 +27,15 @@ spec =
       itWithOuter "index returns \"index\"" $ \port -> do
         let backend = buildBackend port
         sampleIndex backend `shouldReturn` "index"
+
+      -- TODO: Check status code
+      itWithOuter "sampleMaintenance returns \"Sorry, we are under maintenance\"" $ \port -> do
+        let backend = buildBackend port
+            res = Response
+                  { bodyObject = "Sorry, we are under maintenance"
+                  , statusCode = Status503
+                  }
+        sampleMaintenance backend `shouldReturn` res
 
       itWithOuter "aboutUs returns \"About IIJ\"" $ \port -> do
         let backend = buildBackend port

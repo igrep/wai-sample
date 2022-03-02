@@ -27,7 +27,8 @@ import           LiftType                    (liftTypeQ)
 import           Network.HTTP.Client.Conduit (parseUrlThrow)
 import           Network.HTTP.Media          (parseAccept)
 import           Network.HTTP.Simple         (getResponseBody,
-                                              getResponseHeader, httpLBS)
+                                              getResponseHeader,
+                                              getResponseStatus, httpLBS)
 import qualified Network.HTTP.Simple         as HS
 import           Network.HTTP.Types.Method   (Method)
 import qualified Network.URI.Encode          as URI
@@ -62,7 +63,11 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
                 (fail $ "Invalid Content-Type returned from the server: " ++ show returnedContentType)
                 return
                 mContentType
-              fromResponseBody contentType ctype $ getResponseBody res
+              let rres = RawResponse
+                    { rawBody = getResponseBody res
+                    , rawStatusCode = Just $ getResponseStatus res
+                    }
+              fromRawResponse contentType ctype rres
           |]
     def <- funD
       funName

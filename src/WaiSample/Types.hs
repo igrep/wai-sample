@@ -90,8 +90,16 @@ instance IsStatusCode status => HasStatusCode (WithStatus status resTyp) where
 instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus status resTyp) where
   contentTypes (WithStatus _st resTyp) = contentTypes resTyp
 
-instance (Lift status, IsStatusCode status, ToRawResponse resTyp resObj) => ToRawResponse (WithStatus status resTyp) resObj where
-  toRawResponse mediaType (WithStatus _st resTyp) resObj = toRawResponse mediaType resTyp resObj
 
-instance (Lift status, IsStatusCode status, FromRawResponse resTyp resObj) => FromRawResponse (WithStatus status resTyp) resObj where
-  fromRawResponse mediaType (WithStatus _st resTyp) bs = fromRawResponse mediaType resTyp bs
+instance (Typeable status, Lift status, IsStatusCode status, ToRawResponse resTyp resObj) => ToRawResponse (WithStatus status resTyp) (Response status resObj) where
+  toRawResponse mediaType (WithStatus _st resTyp) res = do
+    rr <- toRawResponse mediaType resTyp (bodyObject res)
+    return $ RawResponse (Just (toStatusCode (statusCode res))) (rawBody rr)
+
+
+instance (Typeable status, Lift status, IsStatusCode status, FromRawResponse resTyp resObj) => FromRawResponse (WithStatus status resTyp) (Response status resObj) where
+  fromRawResponse mediaType (WithStatus _st resTyp) rr = do
+    resObj <- fromRawResponse mediaType resTyp rr
+    rawSt <- maybe (fail "Unexpected status code") return $ rawStatusCode rr
+    status <- maybe (fail "Unexpected status code") return $ fromStatusCode rawSt
+    return $ Response status resObj

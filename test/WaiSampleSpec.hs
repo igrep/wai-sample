@@ -16,7 +16,7 @@ import           Network.Wai.Test          (Session, assertBody, assertHeader,
                                             request, setPath)
 import           Network.Wai.Test.Internal (initState)
 import           Test.Syd                  (Spec, around, describe, it)
-import           WaiSample
+import           WaiSample.Server          (sampleApp)
 
 
 spec :: Spec

@@ -20,7 +20,7 @@ import           WaiSample.Types.Status
 
 data Response status resObj = Response
   { statusCode :: status
-  , bodyObj    :: resObj
+  , bodyObject :: resObj
   } deriving (Show, Eq)
   -- TODO: Add other header etc.
 
@@ -31,19 +31,6 @@ data RawResponse = RawResponse
 
 defaultRawResponse :: BL.ByteString -> RawResponse
 defaultRawResponse = RawResponse Nothing
-
-instance (Typeable status, IsStatusCode status, ToRawResponse resTyp resObj) => ToRawResponse resTyp (Response status resObj) where
-  toRawResponse mediaType resTyp res = do
-    rr <- toRawResponse mediaType resTyp (bodyObj res)
-    return $ RawResponse (Just (toStatusCode (statusCode res))) (rawBody rr)
-
-instance (Typeable status, IsStatusCode status, FromRawResponse resTyp resObj) => FromRawResponse resTyp (Response status resObj) where
-  -- fromRawResponse :: MediaType -> resTyp -> RawResponse -> IO resObj
-  fromRawResponse mediaType resTyp rr = do
-    resObj <- fromRawResponse mediaType resTyp rr
-    rawSt <- maybe (fail "Unexpected status code") return $ rawStatusCode rr
-    status <- maybe (fail "Unexpected status code") return $ fromStatusCode rawSt
-    return $ Response status resObj
 
 
 data SomeResponse resTyp where
