@@ -19,6 +19,7 @@ common common
       base >=4.7 && <5
     , bytestring
     , http-types
+    , http-client
     , mtl
     , text
     , wai
@@ -52,7 +53,6 @@ library
     , lift-type
     , http-media
     , http-api-data
-    , http-conduit
     , safe
     , template-haskell
     , uri-encode

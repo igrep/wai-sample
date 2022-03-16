@@ -5,36 +5,35 @@
 module WaiSample.Client
   ( declareClient
   , Backend
-  , httpConduitBackend
+  , httpClientBackend
   ) where
 
-import qualified Control.Monad.State.Strict  as SS
-import qualified Data.ByteString.Char8       as B
-import qualified Data.ByteString.Lazy.Char8  as BL
-import qualified Data.CaseInsensitive        as CI
-import           Data.Char                   (toLower, toUpper)
-import qualified Data.List.NonEmpty          as NE
-import           Data.Proxy                  (Proxy)
-import qualified Data.Text                   as T
-import           Data.Typeable               (Typeable, tyConName, typeRep,
-                                              typeRepTyCon)
-import           Language.Haskell.TH         (DecsQ, ExpQ, Q, TypeQ, appT,
-                                              clause, funD, mkName, newName,
-                                              normalB, sigD, stringE, varE,
-                                              varP)
-import           Language.Haskell.TH.Syntax  (Name)
-import           LiftType                    (liftTypeQ)
-import           Network.HTTP.Client.Conduit (parseUrlThrow)
-import           Network.HTTP.Media          (parseAccept)
-import           Network.HTTP.Simple         (getResponseBody,
-                                              getResponseHeader,
-                                              getResponseStatus, httpLBS)
-import qualified Network.HTTP.Simple         as HS
-import           Network.HTTP.Types.Method   (Method)
-import qualified Network.URI.Encode          as URI
-import           Safe                        (headDef)
+import qualified Control.Monad.State.Strict as SS
+import qualified Data.ByteString.Char8      as B
+import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.CaseInsensitive       as CI
+import           Data.Char                  (toLower, toUpper)
+import qualified Data.List.NonEmpty         as NE
+import           Data.Maybe                 (fromMaybe)
+import           Data.Proxy                 (Proxy)
+import qualified Data.Text                  as T
+import           Data.Typeable              (Typeable, tyConName, typeRep,
+                                             typeRepTyCon)
+import           Language.Haskell.TH        (DecsQ, ExpQ, Q, TypeQ, appT,
+                                             clause, funD, mkName, newName,
+                                             normalB, sigD, stringE, varE, varP)
+import           Language.Haskell.TH.Syntax (Name)
+import           LiftType                   (liftTypeQ)
+import           Network.HTTP.Client        (Manager, httpLbs, parseUrlThrow,
+                                             responseBody, responseHeaders,
+                                             responseStatus,
+                                             setRequestIgnoreStatus)
+import qualified Network.HTTP.Client        as HC
+import           Network.HTTP.Media         (parseAccept)
+import           Network.HTTP.Types.Method  (Method)
+import qualified Network.URI.Encode         as URI
 import           WaiSample
-import           Web.HttpApiData             (toUrlPiece)
+import           Web.HttpApiData            (toUrlPiece)
 
 
 declareClient :: String -> [Handler] -> DecsQ
@@ -56,16 +55,16 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
             do
               res <- $(varE bd) (B.pack $(stringE $ B.unpack meth)) $ URI.encode $(p)
               let headerName = CI.mk $ B.pack "Content-Type"
-                  contentTypesFromServer = getResponseHeader headerName res
-                  returnedContentType = headDef (B.pack defaultMimeType) contentTypesFromServer
+                  contentTypeFromServer = lookup headerName $ responseHeaders res
+                  returnedContentType = fromMaybe (B.pack defaultMimeType) contentTypeFromServer
                   mContentType = parseAccept returnedContentType
               contentType <- maybe
                 (fail $ "Invalid Content-Type returned from the server: " ++ show returnedContentType)
                 return
                 mContentType
               let rres = RawResponse
-                    { rawBody = getResponseBody res
-                    , rawStatusCode = Just $ getResponseStatus res
+                    { rawBody = responseBody res
+                    , rawStatusCode = Just $ responseStatus res
                     }
               fromRawResponse contentType ctype rres
           |]
@@ -162,10 +161,10 @@ funcT a b = [t| (->) |] `appT` a `appT` b
 infixr 1 `funcT`
 
 
-type Backend = Method -> String -> IO (HS.Response BL.ByteString)
+type Backend = Method -> String -> IO (HC.Response BL.ByteString)
 
 
-httpConduitBackend :: String -> Backend
-httpConduitBackend rootUrl method pathPieces = do
+httpClientBackend :: String -> Manager -> Backend
+httpClientBackend rootUrl manager method pathPieces = do
   req <- parseUrlThrow $ B.unpack method ++ " " ++ rootUrl ++ pathPieces
-  httpLBS req
+  httpLbs (setRequestIgnoreStatus  req) manager
