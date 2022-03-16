@@ -49,7 +49,6 @@ import           WaiSample.Types
 
 sampleRoutes :: [Handler]
 sampleRoutes =
-  -- get "index" root (WithStatus status505 Json :<|> WithStatus status500 PlainText)) (\_ -> return $ body (Right "index" :: Either Error T.Text))
   [ get "index" root PlainText (\_ -> return ("index" :: T.Text))
   , get "maintenance" (path "maintenance")
       (WithStatus Status503 PlainText)
@@ -65,9 +64,12 @@ sampleRoutes =
       (return . customerOfId)
   , get "customerIdJson"
     -- /customer/:id.json
-    (path "customer/" *> decimalPiece <* path ".json")
-    Json
-    (return . customerOfId)
+      (path "customer/" *> decimalPiece <* path ".json")
+      (Json :<|> WithStatus Status503 Json)
+      (\i ->
+        if i == 503
+          then return $ SampleError "Invalid Customer"
+          else return $ customerOfId i)
   , get "customerTransaction"
     ( do
         path "customer/"
@@ -106,6 +108,20 @@ instance FromJSON Customer
 instance ToForm Customer
 
 instance FromForm Customer
+
+
+newtype SampleError = SampleError
+  { message :: String
+  } deriving (Eq, Generic, Show)
+
+instance ToJSON SampleError where
+  toEncoding = Json.genericToEncoding Json.defaultOptions
+
+instance FromJSON SampleError
+
+instance ToForm SampleError
+
+instance FromForm SampleError
 
 
 getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
