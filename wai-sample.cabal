@@ -41,6 +41,7 @@ library
   other-modules:
       WaiSample.Routes
       WaiSample.Types.Response
+      WaiSample.Types.Response.Sum
       WaiSample.Types.ContentTypes
       WaiSample.Types.Status
   hs-source-dirs:
