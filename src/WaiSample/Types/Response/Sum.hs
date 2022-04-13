@@ -31,7 +31,7 @@ import           GHC.TypeLits   (ErrorMessage (..), TypeError)
 {-
   Left (Right 1) :: Either (Either Bool Int) String
   That (This 1) :: Union '[String, Int]
-  That (This 1) :: Union '[String, Int, Maybe Bool,]
+  That (This 1) :: Union '[String, Int, Maybe Bool]
   That (This 1) :: Union '[]
                           String ': [Int]
                           String ': Int ': '[]
@@ -43,6 +43,19 @@ import           GHC.TypeLits   (ErrorMessage (..), TypeError)
 data Sum (as :: [*]) where
   This :: a -> Sum (a ': as)
   That :: Sum as -> Sum (a ': as)
+
+
+sumLift :: IsMember a as => a -> Sum as
+sumLift = sumLift'
+
+
+sumMatch :: IsMember a as => Sum as -> Maybe a
+sumMatch = sumMatch'
+
+
+sumChoose :: (a -> c) -> (Sum as -> c) -> Sum (a ': as) -> c
+sumChoose onThis _ (This a) = onThis a
+sumChoose _ onThat (That u) = onThat u
 
 
 -- | This is a helpful 'Constraint' synonym to assert that @a@ is a member of
@@ -91,22 +104,26 @@ type NoElementError (r :: *) (rs :: [*]) =
 --
 -- As an end-user, you should never need to implement an additional instance of
 -- this typeclass.
-class i ~ RIndex a as => SumElemAt (a :: *) (as :: [*]) (i :: Nat) where
-  unionLift :: a -> Sum as
-  unionMatch :: Sum as -> Maybe a
+class (i ~ RIndex a as) => SumElemAt (a :: *) (as :: [*]) (i :: Nat) where
+  sumLift' :: a -> Sum as
+  sumMatch' :: Sum as -> Maybe a
 
 instance SumElemAt a (a ': as) 'Z where
-  unionLift = This
-  unionMatch (This x)  = Just x
-  unionMatch (That xs) = Nothing
+  -- sumLift' :: a -> Sum (a ': as)
+  sumLift' = This
+  -- sumMatch' :: Sum (a ': as) -> Maybe a
+  sumMatch' (This x) = Just x
+  sumMatch' (That _) = Nothing
 
 instance
   ( RIndex a (b ': as) ~ 'S i
   , SumElemAt a as i
   ) => SumElemAt a (b ': as) ('S i) where
-  unionLift = That . unionLift
-  unionMatch (This _)  = Nothing
-  unionMatch (That xs) = unionMatch xs
+  -- sumLift' :: a -> Sum (b ': as)
+  sumLift' = That . sumLift'
+  -- sumMatch' :: Sum (b ': as) -> Maybe a
+  sumMatch' (This _)  = Nothing
+  sumMatch' (That xs) = sumMatch' xs
 
 
 type family RIndex (a :: *) (as :: [*]) :: Nat where
