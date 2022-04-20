@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
@@ -11,9 +12,17 @@
 -- | Ref. https://github.com/cdepillabout/world-peace/blob/0596da67d792ccf9f0ddbe44b5ce71b38cbde020/src/Data/WorldPeace/Union.hs
 module WaiSample.Types.Response.Sum where
 
-import           Data.Kind      (Constraint)
-import           Data.Type.Bool (If)
-import           GHC.TypeLits   (ErrorMessage (..), TypeError)
+import           Data.Kind                    (Constraint)
+import           Data.List.NonEmpty           (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty           as NE
+import           Data.Proxy                   (Proxy (Proxy))
+import           Data.Type.Bool               (If)
+import           GHC.TypeLits                 (ErrorMessage (..), TypeError)
+import           Language.Haskell.TH.Syntax   (Lift)
+import           Network.HTTP.Media           (MediaType, (//), (/:))
+import qualified Network.HTTP.Types.Status    as HTS
+import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
+import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
 
 -- [1, 2, 3] :: [Int]
@@ -134,3 +143,24 @@ type family RIndex (a :: *) (as :: [*]) :: Nat where
 -- | A mere approximation of the natural numbers. And their image as lifted by
 -- @-XDataKinds@ corresponds to the actual natural numbers.
 data Nat = Z | S Nat
+
+
+class HasStatusCodesAll (as :: [*]) where
+  allStatusCodes :: Proxy as -> [HTS.Status]
+
+instance HasStatusCodesAll '[] where
+  allStatusCodes _ = []
+
+instance (HasStatusCode a, HasStatusCodesAll as) => HasStatusCodesAll (a ': as) where
+  allStatusCodes _ =
+    statusCodes (Proxy :: Proxy a) ++ allStatusCodes (Proxy :: Proxy as)
+
+
+class HasContentTypesAll (as :: [*]) where
+  allContentTypes :: Proxy as -> NE.NonEmpty MediaType
+
+instance HasContentTypes a => HasContentTypesAll '[a] where
+  allContentTypes _ = contentTypes (Proxy :: Proxy a)
+
+instance (HasContentTypes a, HasContentTypesAll as) => HasContentTypesAll (a ': as) where
+  allContentTypes _ = contentTypes (Proxy :: Proxy a) <> allContentTypes (Proxy :: Proxy as)

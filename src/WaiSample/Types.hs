@@ -1,9 +1,10 @@
-{-# LANGUAGE DeriveLift                #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveLift            #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 
 module WaiSample.Types
   ( RoutingTable (..)
@@ -12,11 +13,12 @@ module WaiSample.Types
   , WithStatus (..)
   , module WaiSample.Types.ContentTypes
   , module WaiSample.Types.Response
+  , module WaiSample.Types.Response.Sum
   , module WaiSample.Types.Status
   ) where
 
 import qualified Data.Foldable                as F
-import           Data.Proxy                   (Proxy)
+import           Data.Proxy                   (Proxy (Proxy))
 import qualified Data.Text                    as T
 import           Data.Typeable                (Typeable)
 import           Language.Haskell.TH.Syntax   (Lift)
@@ -25,6 +27,7 @@ import           Web.HttpApiData              (FromHttpApiData, ToHttpApiData)
 
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Response
+import           WaiSample.Types.Response.Sum
 import           WaiSample.Types.Status
 
 
@@ -47,22 +50,17 @@ instance Applicative RoutingTable where
 
 data Handler where
   Handler
-    ::
-     ( Typeable a
-     , HasStatusCode resTyp -- TODO: Remove?
-     , HasContentTypes resTyp -- TODO: Remove?
-     , ToRawResponse resTyp resObj
-     , FromRawResponse resTyp resObj
-     )
+    :: (ToRawResponse resTyp resObj, FromRawResponse resTyp resObj)
     => String -> Method -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
     --                                                          ^^^^^^
     --                                                          Text
     --                                                      (Response Status404 Text)
 
-data ChooseResponseType a b = a :<|> b deriving Lift
 
-instance (HasStatusCode a, HasStatusCode b) => HasStatusCode (ChooseResponseType a b) where
-  statusCodes (a :<|> b) = statusCodes a ++ statusCodes b
+instance HasStatusCodesAll as => HasStatusCode (Sum as) where
+  statusCodes _ = allStatusCodes (Proxy :: Proxy as)
+
+data ChooseResponseType a b = a :<|> b deriving Lift
 
 instance (HasContentTypes a, HasContentTypes b) => HasContentTypes (ChooseResponseType a b) where
   contentTypes (a :<|> b) = contentTypes a <> contentTypes b

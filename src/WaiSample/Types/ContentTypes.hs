@@ -5,6 +5,7 @@ module WaiSample.Types.ContentTypes where
 
 import           Data.List.NonEmpty         (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty         as NE
+import           Data.Proxy                 (Proxy (Proxy))
 import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Media         (MediaType, (//), (/:))
 
@@ -12,7 +13,7 @@ import           WaiSample.Types.Status
 
 
 class Lift resTyp => HasContentTypes resTyp where
-  contentTypes :: resTyp -> NE.NonEmpty MediaType
+  contentTypes :: Proxy resTyp -> NE.NonEmpty MediaType
 
 data Json = Json deriving Lift
 

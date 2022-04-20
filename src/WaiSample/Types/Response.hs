@@ -33,9 +33,6 @@ defaultRawResponse :: BL.ByteString -> RawResponse
 defaultRawResponse = RawResponse Nothing
 
 
-data SomeResponse resTyp where
-  SomeResponse :: (ToRawResponse resTyp resObj, FromRawResponse resTyp resObj) => resObj -> SomeResponse resTyp
-
 class (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => ToRawResponse resTyp resObj where
   toRawResponse :: MediaType -> resTyp -> resObj -> IO RawResponse
 

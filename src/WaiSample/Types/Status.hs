@@ -2,6 +2,7 @@
 
 module WaiSample.Types.Status where
 
+import           Data.Proxy                 (Proxy (Proxy))
 import           Language.Haskell.TH.Syntax (Lift)
 import qualified Network.HTTP.Types.Status  as HTS
 
@@ -37,5 +38,5 @@ instance IsStatusCode Status503 where
   fromStatusCode st = if st == HTS.status503 then Just Status503 else Nothing
 
 class HasStatusCode resTyp where
-  statusCodes :: resTyp -> [HTS.Status]
+  statusCodes :: Proxy resTyp -> [HTS.Status]
   statusCodes _ = []
