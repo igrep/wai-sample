@@ -9,7 +9,6 @@
 module WaiSample.Types
   ( RoutingTable (..)
   , Handler (..)
-  , ChooseResponseType (..)
   , WithStatus (..)
   , module WaiSample.Types.ContentTypes
   , module WaiSample.Types.Response
@@ -17,7 +16,6 @@ module WaiSample.Types
   , module WaiSample.Types.Status
   ) where
 
-import qualified Data.Foldable                as F
 import           Data.Proxy                   (Proxy (Proxy))
 import qualified Data.Text                    as T
 import           Data.Typeable                (Typeable)
@@ -57,42 +55,20 @@ data Handler where
     --                                                      (Response Status404 Text)
 
 
-instance HasStatusCodesAll as => HasStatusCode (Sum as) where
-  statusCodes _ = allStatusCodes (Proxy :: Proxy as)
-
-data ChooseResponseType a b = a :<|> b deriving Lift
-
-instance (HasContentTypes a, HasContentTypes b) => HasContentTypes (ChooseResponseType a b) where
-  contentTypes (a :<|> b) = contentTypes a <> contentTypes b
-
--- TODO: 実際のstatus codeに応じて結果を変える
-instance (ToRawResponse a resObj, ToRawResponse b resObj, Typeable resObj) => ToRawResponse (ChooseResponseType a b) resObj where
-  toRawResponse mediaType (a :<|> b) resObj
-    | mediaType `F.elem` contentTypes a = toRawResponse mediaType a resObj
-    | mediaType `F.elem` contentTypes b = toRawResponse mediaType b resObj
-    | otherwise = fail "No suitable media type"
-
--- TODO: 実際のstatus codeに応じて結果を変える
-instance (FromRawResponse a resObj, FromRawResponse b resObj) => FromRawResponse (ChooseResponseType a b) resObj where
-  fromRawResponse mediaType (a :<|> b) bs
-    | mediaType `F.elem` contentTypes a = fromRawResponse mediaType a bs
-    | mediaType `F.elem` contentTypes b = fromRawResponse mediaType b bs
-    | otherwise = fail "No suitable media type" -- Perhaps should improve this error message.
-
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)
 
 -- NOTE: Current implementation has a problem that for example `WithStatus 404 (WithStatus 500 PlainText)` ignores 500. But I'll ignore the problem
 instance IsStatusCode status => HasStatusCode (WithStatus status resTyp) where
-  statusCodes (WithStatus st _resTyp) = [toStatusCode st]
+  statusCodes _ = [toStatusCode (Proxy :: Proxy status)]
 
 instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus status resTyp) where
-  contentTypes (WithStatus _st resTyp) = contentTypes resTyp
+  contentTypes _ = contentTypes (Proxy :: Proxy resTyp)
 
 
 instance (Typeable status, Lift status, IsStatusCode status, ToRawResponse resTyp resObj) => ToRawResponse (WithStatus status resTyp) (Response status resObj) where
   toRawResponse mediaType (WithStatus _st resTyp) res = do
     rr <- toRawResponse mediaType resTyp (bodyObject res)
-    return $ RawResponse (Just (toStatusCode (statusCode res))) (rawBody rr)
+    return $ RawResponse (Just (toStatusCode (Proxy :: Proxy status))) (rawBody rr)
 
 
 instance (Typeable status, Lift status, IsStatusCode status, FromRawResponse resTyp resObj) => FromRawResponse (WithStatus status resTyp) (Response status resObj) where

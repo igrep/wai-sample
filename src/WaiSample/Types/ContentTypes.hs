@@ -5,7 +5,7 @@ module WaiSample.Types.ContentTypes where
 
 import           Data.List.NonEmpty         (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty         as NE
-import           Data.Proxy                 (Proxy (Proxy))
+import           Data.Proxy                 (Proxy)
 import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Media         (MediaType, (//), (/:))
 

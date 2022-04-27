@@ -1,10 +1,12 @@
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE EmptyCase             #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
@@ -13,13 +15,14 @@
 module WaiSample.Types.Response.Sum where
 
 import           Data.Kind                    (Constraint)
-import           Data.List.NonEmpty           (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty           as NE
 import           Data.Proxy                   (Proxy (Proxy))
 import           Data.Type.Bool               (If)
 import           GHC.TypeLits                 (ErrorMessage (..), TypeError)
-import           Language.Haskell.TH.Syntax   (Lift)
-import           Network.HTTP.Media           (MediaType, (//), (/:))
+import           Language.Haskell.TH          (ExpQ, appE)
+import           Language.Haskell.TH.Syntax   (Lift, lift, liftTyped,
+                                               unsafeTExpCoerce)
+import           Network.HTTP.Media           (MediaType)
 import qualified Network.HTTP.Types.Status    as HTS
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
 import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
@@ -53,6 +56,20 @@ data Sum (as :: [*]) where
   This :: a -> Sum (a ': as)
   That :: Sum as -> Sum (a ': as)
 
+class LiftSum (as :: [*]) where
+  liftSum :: Sum as -> ExpQ
+
+instance LiftSum '[] where
+  liftSum _ = [| absurdSum |]
+
+instance (Lift a, LiftSum as) => LiftSum (a ': as) where
+  liftSum (This this) = lift this
+  liftSum (That that) = [| That $(liftSum that) |]
+
+instance LiftSum as => Lift (Sum as) where
+  liftTyped x = unsafeTExpCoerce (liftSum x)
+  lift = liftSum
+
 
 sumLift :: IsMember a as => a -> Sum as
 sumLift = sumLift'
@@ -65,6 +82,9 @@ sumMatch = sumMatch'
 sumChoose :: (a -> c) -> (Sum as -> c) -> Sum (a ': as) -> c
 sumChoose onThis _ (This a) = onThis a
 sumChoose _ onThat (That u) = onThat u
+
+absurdSum :: Sum '[] -> a
+absurdSum u = case u of {}
 
 
 -- | This is a helpful 'Constraint' synonym to assert that @a@ is a member of
@@ -155,6 +175,9 @@ instance (HasStatusCode a, HasStatusCodesAll as) => HasStatusCodesAll (a ': as) 
   allStatusCodes _ =
     statusCodes (Proxy :: Proxy a) ++ allStatusCodes (Proxy :: Proxy as)
 
+instance HasStatusCodesAll as => HasStatusCode (Sum as) where
+  statusCodes _ = allStatusCodes (Proxy :: Proxy as)
+
 
 class HasContentTypesAll (as :: [*]) where
   allContentTypes :: Proxy as -> NE.NonEmpty MediaType
@@ -164,3 +187,6 @@ instance HasContentTypes a => HasContentTypesAll '[a] where
 
 instance (HasContentTypes a, HasContentTypesAll as) => HasContentTypesAll (a ': as) where
   allContentTypes _ = contentTypes (Proxy :: Proxy a) <> allContentTypes (Proxy :: Proxy as)
+
+instance HasContentTypesAll as => HasContentTypes (Sum as) where
+  contentTypes _ = allContentTypes (Proxy :: Proxy as)

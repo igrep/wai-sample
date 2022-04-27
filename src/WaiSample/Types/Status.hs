@@ -2,7 +2,7 @@
 
 module WaiSample.Types.Status where
 
-import           Data.Proxy                 (Proxy (Proxy))
+import           Data.Proxy                 (Proxy)
 import           Language.Haskell.TH.Syntax (Lift)
 import qualified Network.HTTP.Types.Status  as HTS
 
@@ -10,7 +10,7 @@ import qualified Network.HTTP.Types.Status  as HTS
 data DefaultStatus = DefaultStatus deriving (Show, Eq, Lift)
 
 class IsStatusCode status where
-  toStatusCode :: status -> HTS.Status
+  toStatusCode :: Proxy status -> HTS.Status
   fromStatusCode :: HTS.Status -> Maybe status
 
 data Status200 = Status200 deriving (Show, Eq, Lift)
