@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo             #-}
+{-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances         #-}
@@ -49,27 +50,27 @@ import           WaiSample.Types
 
 sampleRoutes :: [Handler]
 sampleRoutes =
-  [ get "index" root PlainText (\_ -> return ("index" :: T.Text))
+  [ get "index" root (Proxy :: Proxy PlainText) (\_ -> return ("index" :: T.Text))
   , get "maintenance" (path "maintenance")
-      (WithStatus Status503 PlainText)
+      (Proxy :: Proxy (WithStatus Status503 PlainText))
       (\_ -> return $ Response Status503 ("Sorry, we are under maintenance" :: T.Text))
-  , get "aboutUs" (path "about/us") PlainText (\_ -> return ("About IIJ" :: T.Text))
-  , get "aboutUsFinance" (path "about/us/finance") PlainText (\_ -> return ("Financial Report 2021" :: T.Text))
-  , get "aboutFinance" (path "about/finance") PlainText (\_ -> return ("Financial Report 2020 /" :: T.Text))
+  , get "aboutUs" (path "about/us") (Proxy :: Proxy PlainText) (\_ -> return ("About IIJ" :: T.Text))
+  , get "aboutUsFinance" (path "about/us/finance") (Proxy :: Proxy PlainText) (\_ -> return ("Financial Report 2021" :: T.Text))
+  , get "aboutFinance" (path "about/finance") (Proxy :: Proxy PlainText) (\_ -> return ("Financial Report 2020 /" :: T.Text))
   -- TODO: Drop the initial slash?
-  , get "aboutFinanceImpossible" (path "/about/finance/impossible") PlainText (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
+  , get "aboutFinanceImpossible" (path "/about/finance/impossible") (Proxy :: Proxy PlainText) (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
   , get "customerId"
       (path "customer/" *> decimalPiece)
-      (Json :<|> FormUrlEncoded)
+      (Proxy :: (Proxy (Sum '[Json, FormUrlEncoded])))
       (return . customerOfId)
   , get "customerIdJson"
     -- /customer/:id.json
       (path "customer/" *> decimalPiece <* path ".json")
-      (Json :<|> WithStatus Status503 Json)
+      (Proxy :: (Proxy (Sum '[Json, WithStatus Status503 Json])))
       (\i ->
         if i == 503
-          then return $ SampleError "Invalid Customer"
-          else return $ customerOfId i)
+          then return . sumLift $ SampleError "Invalid Customer"
+          else return . sumLift $ customerOfId i)
   , get "customerTransaction"
     ( do
         path "customer/"
