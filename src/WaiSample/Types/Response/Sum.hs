@@ -189,5 +189,5 @@ instance HasContentTypes a => HasContentTypesAll '[a] where
 instance (HasContentTypes a, HasContentTypesAll as) => HasContentTypesAll (a ': as) where
   allContentTypes _ = contentTypes (Proxy :: Proxy a) <> allContentTypes (Proxy :: Proxy as)
 
-instance HasContentTypesAll as => HasContentTypes (Sum as) where
+instance (LiftSum as, HasContentTypesAll as) => HasContentTypes (Sum as) where
   contentTypes _ = allContentTypes (Proxy :: Proxy as)
