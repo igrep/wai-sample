@@ -60,10 +60,10 @@ class LiftSum (as :: [*]) where
   liftSum :: Sum as -> ExpQ
 
 instance LiftSum '[] where
-  liftSum _ = [| absurdSum |]
+  liftSum = absurdSum
 
 instance (Lift a, LiftSum as) => LiftSum (a ': as) where
-  liftSum (This this) = lift this
+  liftSum (This this) = [| This $(lift this) |]
   liftSum (That that) = [| That $(liftSum that) |]
 
 instance LiftSum as => Lift (Sum as) where
@@ -82,6 +82,7 @@ sumMatch = sumMatch'
 sumChoose :: (a -> c) -> (Sum as -> c) -> Sum (a ': as) -> c
 sumChoose onThis _ (This a) = onThis a
 sumChoose _ onThat (That u) = onThat u
+
 
 absurdSum :: Sum '[] -> a
 absurdSum u = case u of {}
