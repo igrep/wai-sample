@@ -78,13 +78,13 @@ sampleRoutes =
         transactionName <- paramPiece
         pure (cId, transactionName)
       )
-    PlainText
+    (Proxy :: Proxy PlainText)
     (\(cId, transactionName) ->
       return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
       )
   , post "createProduct"
       (path "products")
-      PlainText
+      (Proxy :: Proxy PlainText)
       (\_ -> return ("Product created" :: T.Text))
   ]
  where
@@ -137,25 +137,19 @@ extractRoutingTable (Handler _name _method tbl _ctype _hdl) = void tbl
 
 handler
   :: forall a resTyp resObj.
-  ( Typeable a
-  , HasContentTypes resTyp
-  , HasStatusCode resTyp
-  , ToRawResponse resTyp resObj
+  ( ToRawResponse resTyp resObj
   , FromRawResponse resTyp resObj
   )
-  => String -> Method -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
+  => String -> Method -> RoutingTable a -> Proxy resTyp -> (a -> IO resObj) -> Handler
 handler = Handler
 
 
 get, post, put, delete, patch
   :: forall a resTyp resObj.
-  ( Typeable a
-  , HasContentTypes resTyp
-  , HasStatusCode resTyp
-  , ToRawResponse resTyp resObj
+  ( ToRawResponse resTyp resObj
   , FromRawResponse resTyp resObj
   )
-  => String -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
+  => String -> RoutingTable a -> Proxy resTyp -> (a -> IO resObj) -> Handler
 get name    = handler name methodGet
 post name   = handler name methodPost
 put name    = handler name methodPut
