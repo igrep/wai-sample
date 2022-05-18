@@ -18,13 +18,16 @@ import           Data.Kind                    (Constraint)
 import qualified Data.List.NonEmpty           as NE
 import           Data.Proxy                   (Proxy (Proxy))
 import           Data.Type.Bool               (If)
+import           Data.Typeable                (Typeable)
 import           GHC.TypeLits                 (ErrorMessage (..), TypeError)
-import           Language.Haskell.TH          (ExpQ, appE)
+import           Language.Haskell.TH          (ExpQ)
 import           Language.Haskell.TH.Syntax   (Lift, lift, liftTyped,
                                                unsafeTExpCoerce)
 import           Network.HTTP.Media           (MediaType)
 import qualified Network.HTTP.Types.Status    as HTS
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
+import           WaiSample.Types.Response     (RawResponse, ToRawResponse,
+                                               toRawResponse)
 import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
 
@@ -191,3 +194,38 @@ instance (HasContentTypes a, HasContentTypesAll as) => HasContentTypesAll (a ': 
 
 instance (LiftSum as, HasContentTypesAll as) => HasContentTypes (Sum as) where
   contentTypes _ = allContentTypes (Proxy :: Proxy as)
+
+
+class ToRawResponseAll (resTyps :: [*]) (resObjs :: [*]) where
+  toRawResponseAll :: MediaType -> Proxy (Sum resTyps) -> Sum resObjs -> IO RawResponse
+
+{-
+ []                 []
+ []                 (resObj : resObjs) => No instance
+ [resTyp]           (resObj : resObjs)
+ (resTyp : resTyps) []
+ (resTyp : resTyps) (resObj : resObjs)
+-}
+
+instance ToRawResponseAll '[] '[] where
+  toRawResponseAll _mt _ = absurdSum
+
+instance (ToRawResponse resTyp resObj, ToRawResponseAll '[] resObjs) => ToRawResponseAll '[resTyp] (resObj ': resObjs) where
+  toRawResponseAll mt _ (This resObj) = toRawResponse mt (Proxy :: Proxy resTyp) resObj
+  toRawResponseAll mt _ (That otherResObjs) = toRawResponseAll mt (Proxy :: Proxy (Sum '[])) otherResObjs
+
+instance ToRawResponseAll resTyps '[] where
+  toRawResponseAll _mt _ = absurdSum
+
+instance (ToRawResponse resTyp resObj, ToRawResponseAll resTyps resObjs) => ToRawResponseAll (resTyp ': resTyps) (resObj ': resObjs) where
+  toRawResponseAll mt _ (This resObj) = toRawResponse mt (Proxy :: Proxy resTyp) resObj
+  toRawResponseAll mt _ (That otherResObjs) = toRawResponseAll mt (Proxy :: Proxy (Sum resTyps)) otherResObjs
+
+instance
+  ( LiftSum resTyps
+  , Typeable (Sum resObjs)
+  , HasStatusCodesAll resTyps
+  , HasContentTypesAll resTyps
+  , ToRawResponseAll resTyps resObjs
+  ) => ToRawResponse (Sum resTyps) (Sum resObjs) where
+  toRawResponse = toRawResponseAll
