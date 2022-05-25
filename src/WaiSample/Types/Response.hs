@@ -1,13 +1,16 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module WaiSample.Types.Response where
 
 import           Data.Aeson                   (FromJSON, ToJSON)
 import qualified Data.Aeson                   as Json
 import qualified Data.ByteString.Lazy.Char8   as BL
-import           Data.Proxy                   (Proxy (Proxy))
+import qualified Data.Foldable                as F
+import qualified Data.List.NonEmpty           as NE
+import           Data.Proxy                   (Proxy)
 import qualified Data.Text                    as T
 import qualified Data.Text.Encoding           as TE
 import           Data.Typeable                (Typeable)
@@ -40,11 +43,13 @@ class (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => ToRawRe
 class (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => FromRawResponse resTyp resObj where
   fromRawResponse :: MediaType -> Proxy resTyp -> RawResponse -> IO resObj
 
+
 instance (ToJSON resObj, Typeable resObj) => ToRawResponse Json resObj where
   toRawResponse _ _ = return . defaultRawResponse . Json.encode
 
 instance (FromJSON resObj, Typeable resObj) => FromRawResponse Json resObj where
   fromRawResponse _ _ = either fail return . Json.eitherDecode' . rawBody
+
 
 instance (ToForm resObj, Typeable resObj) => ToRawResponse FormUrlEncoded resObj where
   toRawResponse _ _ = return . defaultRawResponse . urlEncodeAsForm
@@ -52,8 +57,19 @@ instance (ToForm resObj, Typeable resObj) => ToRawResponse FormUrlEncoded resObj
 instance (FromForm resObj, Typeable resObj) => FromRawResponse FormUrlEncoded resObj where
   fromRawResponse _ _ = either (fail . T.unpack) return . urlDecodeAsForm . rawBody
 
+
 instance ToRawResponse PlainText T.Text where
   toRawResponse _ _ = return . defaultRawResponse . BL.fromStrict . TE.encodeUtf8
 
 instance FromRawResponse PlainText T.Text where
   fromRawResponse _ _ = return . TE.decodeUtf8 . BL.toStrict . rawBody
+
+
+instance (ToRawResponse resTyp1 resObj, ToRawResponse resTyp2 resObj) => ToRawResponse (resTyp1 |&| resTyp2) resObj where
+  -- NOTE: Assume the MediaType value given as the first argument is matched with some of 'contentTypes resTypP'.
+  --       So 'F.find (== mt) mts' shouldn't return Nothing usually.
+  toRawResponse mt resTypP resObj =
+    let mts = contentTypes resTypP
+     in case F.find (== mt) mts of
+            Just foundMt -> toRawResponse mt foundMt resObj
+            Nothing      -> toRawResponse mt (NE.head mts) resObj

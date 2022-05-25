@@ -61,7 +61,7 @@ sampleRoutes =
   , get "aboutFinanceImpossible" (path "/about/finance/impossible") (Proxy :: Proxy PlainText) (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
   , get "customerId"
       (path "customer/" *> decimalPiece)
-      (Proxy :: (Proxy (Sum '[Json, FormUrlEncoded])))
+      (Proxy :: (Proxy (Json |&| FormUrlEncoded)))
       (return . customerOfId)
   , get "customerIdJson"
     -- /customer/:id.json
