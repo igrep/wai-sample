@@ -64,12 +64,4 @@ instance ToRawResponse PlainText T.Text where
 instance FromRawResponse PlainText T.Text where
   fromRawResponse _ _ = return . TE.decodeUtf8 . BL.toStrict . rawBody
 
-
-instance (ToRawResponse resTyp1 resObj, ToRawResponse resTyp2 resObj) => ToRawResponse (resTyp1 |&| resTyp2) resObj where
-  -- NOTE: Assume the MediaType value given as the first argument is matched with some of 'contentTypes resTypP'.
-  --       So 'F.find (== mt) mts' shouldn't return Nothing usually.
-  toRawResponse mt resTypP resObj =
-    let mts = contentTypes resTypP
-     in case F.find (== mt) mts of
-            Just foundMt -> toRawResponse mt foundMt resObj
-            Nothing      -> toRawResponse mt (NE.head mts) resObj
+instance ToRawResponse resTyp resObj => ToRawResponse (ContentTypes '[resTyp]) resObj where
