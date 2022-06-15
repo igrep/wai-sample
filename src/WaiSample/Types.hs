@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DeriveLift            #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -49,10 +50,10 @@ instance Applicative RoutingTable where
 data Handler where
   Handler
     :: (ToRawResponse resTyp resObj, FromRawResponse resTyp resObj)
-    => String -> Method -> RoutingTable a -> resTyp -> (a -> IO resObj) -> Handler
-    --                                                          ^^^^^^
-    --                                                          Text
-    --                                                      (Response Status404 Text)
+    => String -> Method -> RoutingTable a -> (a -> IO resObj) -> Handler
+    --                                                ^^^^^^
+    --                                                Text
+    --                                                (Response Status404 Text)
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)

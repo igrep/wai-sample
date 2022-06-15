@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes       #-}
 {-# LANGUAGE ApplicativeDo             #-}
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveGeneric             #-}
@@ -7,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TypeApplications          #-}
 
 module WaiSample
   ( sampleRoutes
@@ -50,28 +52,25 @@ import           WaiSample.Types
 
 sampleRoutes :: [Handler]
 sampleRoutes =
-  [ get "index" root (Proxy :: Proxy PlainText) (\_ -> return ("index" :: T.Text))
-  , get "maintenance" (path "maintenance")
-      (Proxy :: Proxy (WithStatus Status503 PlainText))
+  [ get @PlainText "index" root (\_ -> return ("index" :: T.Text))
+  , get @PlainText "maintenance" (path "maintenance")
       (\_ -> return $ Response Status503 ("Sorry, we are under maintenance" :: T.Text))
-  , get "aboutUs" (path "about/us") (Proxy :: Proxy PlainText) (\_ -> return ("About IIJ" :: T.Text))
-  , get "aboutUsFinance" (path "about/us/finance") (Proxy :: Proxy PlainText) (\_ -> return ("Financial Report 2021" :: T.Text))
-  , get "aboutFinance" (path "about/finance") (Proxy :: Proxy PlainText) (\_ -> return ("Financial Report 2020 /" :: T.Text))
+  , get @PlainText "aboutUs" (path "about/us") (\_ -> return ("About IIJ" :: T.Text))
+  , get @PlainText "aboutUsFinance" (path "about/us/finance") (\_ -> return ("Financial Report 2021" :: T.Text))
+  , get @PlainText "aboutFinance" (path "about/finance") (\_ -> return ("Financial Report 2020 /" :: T.Text))
   -- TODO: Drop the initial slash?
-  , get "aboutFinanceImpossible" (path "/about/finance/impossible") (Proxy :: Proxy PlainText) (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
-  , get "customerId"
+  , get @PlainText "aboutFinanceImpossible" (path "/about/finance/impossible") (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
+  , get @(ContentTypes '[Json, FormUrlEncoded]) "customerId"
       (path "customer/" *> decimalPiece)
-      (Proxy :: (Proxy (ContentTypes '[Json, FormUrlEncoded])))
       (return . customerOfId)
-  , get "customerIdJson"
+  , get @(Sum '[Json, WithStatus Status503 Json]) @(Sum '[Customer, SampleError]) "customerIdJson"
     -- /customer/:id.json
       (path "customer/" *> decimalPiece <* path ".json")
-      (Proxy :: (Proxy (Sum '[Json, WithStatus Status503 Json])))
       (\i ->
         if i == 503
           then return . sumLift $ SampleError "Invalid Customer"
           else return . sumLift $ customerOfId i)
-  , get "customerTransaction"
+  , get @PlainText "customerTransaction"
     ( do
         path "customer/"
         cId <- decimalPiece
@@ -79,13 +78,11 @@ sampleRoutes =
         transactionName <- paramPiece
         pure (cId, transactionName)
       )
-    (Proxy :: Proxy PlainText)
     (\(cId, transactionName) ->
       return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
       )
-  , post "createProduct"
+  , post @PlainText "createProduct"
       (path "products")
-      (Proxy :: Proxy PlainText)
       (\_ -> return ("Product created" :: T.Text))
   ]
  where
@@ -133,29 +130,29 @@ showRoutes :: [Handler] -> T.Text
 showRoutes = ("/" <>) . T.intercalate "\n/" . map (showRoutes' . extractRoutingTable)
 
 extractRoutingTable :: Handler -> RoutingTable ()
-extractRoutingTable (Handler _name _method tbl _ctype _hdl) = void tbl
+extractRoutingTable (Handler _name _method tbl _hdl) = void tbl
 
 
 handler
-  :: forall a resTyp resObj.
+  :: forall resTyp resObj a.
   ( ToRawResponse resTyp resObj
   , FromRawResponse resTyp resObj
   )
-  => String -> Method -> RoutingTable a -> Proxy resTyp -> (a -> IO resObj) -> Handler
-handler = Handler
+  => String -> Method -> RoutingTable a -> (a -> IO resObj) -> Handler
+handler = Handler @resTyp @resObj @a
 
 
 get, post, put, delete, patch
-  :: forall a resTyp resObj.
+  :: forall resTyp resObj a.
   ( ToRawResponse resTyp resObj
   , FromRawResponse resTyp resObj
   )
-  => String -> RoutingTable a -> Proxy resTyp -> (a -> IO resObj) -> Handler
-get name    = handler name methodGet
-post name   = handler name methodPost
-put name    = handler name methodPut
-delete name = handler name methodDelete
-patch name  = handler name methodPatch
+  => String -> RoutingTable a -> (a -> IO resObj) -> Handler
+get name    = handler @resTyp @resObj @a name methodGet
+post name   = handler @resTyp @resObj @a name methodPost
+put name    = handler @resTyp @resObj @a name methodPut
+delete name = handler @resTyp @resObj @a name methodDelete
+patch name  = handler @resTyp @resObj @a name methodPatch
 
 
 printRoutes :: IO ()
