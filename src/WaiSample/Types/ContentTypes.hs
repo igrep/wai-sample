@@ -1,6 +1,9 @@
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveLift                #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE KindSignatures            #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE StandaloneDeriving        #-}
@@ -8,11 +11,8 @@
 
 module WaiSample.Types.ContentTypes where
 
-import           Control.Applicative ((<|>))
-import           Data.List.NonEmpty         (NonEmpty ((:|)))
-import qualified Data.List.NonEmpty         as NE
+import           Control.Applicative        ((<|>))
 import           Data.Proxy                 (Proxy (Proxy))
-import           Data.Typeable              (Typeable)
 import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Media         (MediaType, (//), (/:))
 
@@ -22,10 +22,13 @@ import           WaiSample.Types.Status
 data SomeContentType = forall contTyp. HasContentTypes contTyp => SomeContentType (Proxy contTyp)
 
 
--- TODO: 複数形の HasContentTypes と 単数の HasContentType で別の型クラスにする
-class (Typeable contTyp, Lift contTyp) => HasContentTypes contTyp where
+-- TODO: 複数形のHasContentTypesと単数のHasContentTypeで別の型クラスにする
+--       複数形のHasContentTypesにはmatchContentTypeが必要ないっぽい
+class Lift contTyp => HasContentTypes contTyp where
   contentTypes :: Proxy contTyp -> [MediaType]
 
+  -- TODO: SomeContentTypeがどのcontTypについてのProxyかは引数により自明なので、
+  --       Maybe SomeContentTypeではなくBoolを返す
   matchContentType :: MediaType -> Proxy contTyp -> Maybe SomeContentType
   matchContentType mt contTypP =
     case contentTypes contTypP of
@@ -40,7 +43,7 @@ data Json = Json deriving Lift
 instance HasStatusCode Json
 
 instance HasContentTypes Json where
-  contentTypes _ = "application" // "json" :| []
+  contentTypes _ = ["application" // "json"]
 
 
 data FormUrlEncoded = FormUrlEncoded deriving Lift
@@ -48,7 +51,7 @@ data FormUrlEncoded = FormUrlEncoded deriving Lift
 instance HasStatusCode FormUrlEncoded
 
 instance HasContentTypes FormUrlEncoded where
-  contentTypes _ = "application" // "x-www-form-urlencoded" :| []
+  contentTypes _ = ["application" // "x-www-form-urlencoded"]
 
 
 data PlainText = PlainText deriving Lift
@@ -56,7 +59,7 @@ data PlainText = PlainText deriving Lift
 instance HasStatusCode PlainText
 
 instance HasContentTypes PlainText where
-  contentTypes _ = "text" // "plain" /: ("charset", "UTF-8") :| []
+  contentTypes _ = ["text" // "plain" /: ("charset", "UTF-8")]
 
 
 data ContentTypes (contTyps :: [*])
@@ -71,8 +74,7 @@ instance HasContentTypes (ContentTypes '[]) where
     Nothing
 
 instance
-  ( Typeable contTyps
-  , HasContentTypes contTyp
+  ( HasContentTypes contTyp
   , HasContentTypes (ContentTypes contTyps)
   ) => HasContentTypes (ContentTypes (contTyp ': contTyps)) where
   contentTypes _ = contentTypes (Proxy :: Proxy contTyp) <> contentTypes (Proxy :: Proxy (ContentTypes contTyps))

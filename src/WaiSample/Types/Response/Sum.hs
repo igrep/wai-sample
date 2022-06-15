@@ -15,7 +15,6 @@
 module WaiSample.Types.Response.Sum where
 
 import           Data.Kind                    (Constraint)
-import qualified Data.List.NonEmpty           as NE
 import           Data.Proxy                   (Proxy (Proxy))
 import           Data.Type.Bool               (If)
 import           Data.Typeable                (Typeable)
@@ -184,7 +183,7 @@ instance HasStatusCodesAll as => HasStatusCode (Sum as) where
 
 
 class HasContentTypesAll (as :: [*]) where
-  allContentTypes :: Proxy as -> NE.NonEmpty MediaType
+  allContentTypes :: Proxy as -> [MediaType]
 
 instance HasContentTypes a => HasContentTypesAll '[a] where
   allContentTypes _ = contentTypes (Proxy :: Proxy a)

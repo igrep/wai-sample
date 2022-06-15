@@ -1,6 +1,9 @@
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeOperators         #-}
 
 module WaiSample.Types.Response where
@@ -8,9 +11,7 @@ module WaiSample.Types.Response where
 import           Data.Aeson                   (FromJSON, ToJSON)
 import qualified Data.Aeson                   as Json
 import qualified Data.ByteString.Lazy.Char8   as BL
-import qualified Data.Foldable                as F
-import qualified Data.List.NonEmpty           as NE
-import           Data.Proxy                   (Proxy)
+import           Data.Proxy                   (Proxy (Proxy))
 import qualified Data.Text                    as T
 import qualified Data.Text.Encoding           as TE
 import           Data.Typeable                (Typeable)
@@ -64,4 +65,27 @@ instance ToRawResponse PlainText T.Text where
 instance FromRawResponse PlainText T.Text where
   fromRawResponse _ _ = return . TE.decodeUtf8 . BL.toStrict . rawBody
 
-instance ToRawResponse resTyp resObj => ToRawResponse (ContentTypes '[resTyp]) resObj where
+
+instance ToRawResponse contTyp resObj => ToRawResponse (ContentTypes '[contTyp]) resObj where
+  toRawResponse mt _ resObj = toRawResponse mt (Proxy :: Proxy contTyp) resObj
+
+instance
+  ( ToRawResponse contTyp resObj
+  , ToRawResponse (ContentTypes contTyps) resObj
+  ) => ToRawResponse (ContentTypes (contTyp ': contTyps)) resObj where
+  toRawResponse mt _ resObj =
+    case matchContentType mt (Proxy :: Proxy contTyp) of
+        Just _contTypP -> toRawResponse mt (Proxy :: Proxy contTyp) resObj
+        Nothing -> toRawResponse mt (Proxy :: Proxy (ContentTypes contTyps)) resObj
+
+instance FromRawResponse contTyp resObj => FromRawResponse (ContentTypes '[contTyp]) resObj where
+  fromRawResponse mt _ rr = fromRawResponse mt (Proxy :: Proxy contTyp) rr
+
+instance
+  ( FromRawResponse contTyp resObj
+  , FromRawResponse (ContentTypes contTyps) resObj
+  ) => FromRawResponse (ContentTypes (contTyp ': contTyps)) resObj where
+  fromRawResponse mt _ rr =
+    case matchContentType mt (Proxy :: Proxy contTyp) of
+        Just _contTypP -> fromRawResponse mt (Proxy :: Proxy contTyp) rr
+        Nothing -> fromRawResponse mt (Proxy :: Proxy (ContentTypes contTyps)) rr
