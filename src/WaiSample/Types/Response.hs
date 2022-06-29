@@ -66,8 +66,8 @@ instance FromRawResponse PlainText T.Text where
   fromRawResponse _ _ = return . TE.decodeUtf8 . BL.toStrict . rawBody
 
 
-instance ToRawResponse contTyp resObj => ToRawResponse (ContentTypes '[contTyp]) resObj where
-  toRawResponse mt _ resObj = toRawResponse mt (Proxy :: Proxy contTyp) resObj
+instance Typeable resObj => ToRawResponse (ContentTypes '[]) resObj where
+  toRawResponse _mt _ _resObj = fail "Impossible (ToRawResponse (ContentTypes '[]) resObj)"
 
 instance
   ( ToRawResponse contTyp resObj
@@ -78,8 +78,8 @@ instance
         Just _contTypP -> toRawResponse mt (Proxy :: Proxy contTyp) resObj
         Nothing -> toRawResponse mt (Proxy :: Proxy (ContentTypes contTyps)) resObj
 
-instance FromRawResponse contTyp resObj => FromRawResponse (ContentTypes '[contTyp]) resObj where
-  fromRawResponse mt _ rr = fromRawResponse mt (Proxy :: Proxy contTyp) rr
+instance Typeable resObj => FromRawResponse (ContentTypes '[]) resObj where
+  fromRawResponse _mt _ _rr = fail "Impossible (FromRawResponse (ContentTypes '[]) resObj)"
 
 instance
   ( FromRawResponse contTyp resObj
