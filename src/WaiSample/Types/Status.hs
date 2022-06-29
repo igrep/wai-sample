@@ -7,6 +7,7 @@ import           Language.Haskell.TH.Syntax (Lift)
 import qualified Network.HTTP.Types.Status  as HTS
 
 
+-- TODO: 多分使っていない
 data DefaultStatus = DefaultStatus deriving (Show, Eq, Lift)
 
 class IsStatusCode status where

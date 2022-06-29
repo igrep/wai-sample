@@ -198,14 +198,6 @@ instance (LiftSum as, HasContentTypesAll as) => HasContentTypes (Sum as) where
 class ToRawResponseAll (resTyps :: [*]) (resObjs :: [*]) where
   toRawResponseAll :: MediaType -> Proxy (Sum resTyps) -> Sum resObjs -> IO RawResponse
 
-{-
- []                 []
- []                 (resObj : resObjs) => No instance
- [resTyp]           (resObj : resObjs)
- (resTyp : resTyps) []
- (resTyp : resTyps) (resObj : resObjs)
--}
-
 instance ToRawResponseAll '[] '[] where
   toRawResponseAll _mt _ = absurdSum
 
@@ -219,6 +211,23 @@ instance ToRawResponseAll resTyps '[] where
 instance (ToRawResponse resTyp resObj, ToRawResponseAll resTyps resObjs) => ToRawResponseAll (resTyp ': resTyps) (resObj ': resObjs) where
   toRawResponseAll mt _ (This resObj) = toRawResponse mt (Proxy :: Proxy resTyp) resObj
   toRawResponseAll mt _ (That otherResObjs) = toRawResponseAll mt (Proxy :: Proxy (Sum resTyps)) otherResObjs
+
+  {-
+    matchRoundRobin :: Eq a => [a] -> [a] -> Bool
+    matchRoundRobin [] _ys = False
+    matchRoundRobin (x : xs) ys = x `elem` ys || match xs ys
+
+    matchWrong :: Eq a => [a] -> [a] -> Bool
+    matchWrong [] [] = False
+    matchWrong [x] (y : ys) = x == y || matchWrong [x] ys
+    matchWrong xs [] = False
+    matchWrong (x : xs) (y : ys) = x == y || matchWrong xs ys
+
+    matchCorresponding :: Eq a => [a] -> [a] -> Bool
+    matchCorresponding (x : xs) (y : ys) = x == y && matchCorresponding xs ys
+    matchCorresponding [] [] = True -- absurd
+    matchCorresponding _ _ = False
+  -}
 
 instance
   ( LiftSum resTyps

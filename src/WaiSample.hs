@@ -63,6 +63,7 @@ sampleRoutes =
   , get @(ContentTypes '[Json, FormUrlEncoded]) "customerId"
       (path "customer/" *> decimalPiece)
       (return . customerOfId)
+  -- TODO: try: get @(Sum '[Json, WithStatus Status503 (ContentTypes '[Json, FormUrlEncoded])]) @(Sum '[Customer, SampleError]) "customerIdJson"
   , get @(Sum '[Json, WithStatus Status503 Json]) @(Sum '[Customer, SampleError]) "customerIdJson"
     -- /customer/:id.json
       (path "customer/" *> decimalPiece <* path ".json")
