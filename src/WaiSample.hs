@@ -53,7 +53,7 @@ import           WaiSample.Types
 sampleRoutes :: [Handler]
 sampleRoutes =
   [ get @PlainText "index" root (\_ -> return ("index" :: T.Text))
-  , get @PlainText "maintenance" (path "maintenance")
+  , get @(WithStatus Status503 PlainText) "maintenance" (path "maintenance")
       (\_ -> return $ Response Status503 ("Sorry, we are under maintenance" :: T.Text))
   , get @PlainText "aboutUs" (path "about/us") (\_ -> return ("About IIJ" :: T.Text))
   , get @PlainText "aboutUsFinance" (path "about/us/finance") (\_ -> return ("Financial Report 2021" :: T.Text))
