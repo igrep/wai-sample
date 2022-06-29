@@ -201,13 +201,6 @@ class ToRawResponseAll (resTyps :: [*]) (resObjs :: [*]) where
 instance ToRawResponseAll '[] '[] where
   toRawResponseAll _mt _ = absurdSum
 
-instance (ToRawResponse resTyp resObj, ToRawResponseAll '[] resObjs) => ToRawResponseAll '[resTyp] (resObj ': resObjs) where
-  toRawResponseAll mt _ (This resObj) = toRawResponse mt (Proxy :: Proxy resTyp) resObj
-  toRawResponseAll mt _ (That otherResObjs) = toRawResponseAll mt (Proxy :: Proxy (Sum '[])) otherResObjs
-
-instance ToRawResponseAll resTyps '[] where
-  toRawResponseAll _mt _ = absurdSum
-
 instance (ToRawResponse resTyp resObj, ToRawResponseAll resTyps resObjs) => ToRawResponseAll (resTyp ': resTyps) (resObj ': resObjs) where
   toRawResponseAll mt _ (This resObj) = toRawResponse mt (Proxy :: Proxy resTyp) resObj
   toRawResponseAll mt _ (That otherResObjs) = toRawResponseAll mt (Proxy :: Proxy (Sum resTyps)) otherResObjs
