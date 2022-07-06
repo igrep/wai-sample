@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE EmptyCase             #-}
@@ -25,7 +26,8 @@ import           Language.Haskell.TH.Syntax   (Lift, lift, liftTyped,
 import           Network.HTTP.Media           (MediaType)
 import qualified Network.HTTP.Types.Status    as HTS
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
-import           WaiSample.Types.Response     (RawResponse, ToRawResponse,
+import           WaiSample.Types.Response     (RawResponse, ResponseObject,
+                                               ResponseSpec, ToRawResponse,
                                                toRawResponse)
 import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
@@ -195,38 +197,34 @@ instance (LiftSum as, HasContentTypesAll as) => HasContentTypes (Sum as) where
   contentTypes _ = allContentTypes (Proxy :: Proxy as)
 
 
-class ToRawResponseAll (resTyps :: [*]) (resObjs :: [*]) where
-  toRawResponseAll :: MediaType -> Proxy (Sum resTyps) -> Sum resObjs -> IO RawResponse
+class ResponseSpecs (resSpecs :: [*]) where
+  type AllResponseObjects resSpecs :: [*]
 
-instance ToRawResponseAll '[] '[] where
-  toRawResponseAll _mt _ = absurdSum
+instance ResponseSpecs '[] where
+  type AllResponseObjects '[] = '[]
 
-instance (ToRawResponse resTyp resObj, ToRawResponseAll resTyps resObjs) => ToRawResponseAll (resTyp ': resTyps) (resObj ': resObjs) where
-  toRawResponseAll mt _ (This resObj) = toRawResponse mt (Proxy :: Proxy resTyp) resObj
-  toRawResponseAll mt _ (That otherResObjs) = toRawResponseAll mt (Proxy :: Proxy (Sum resTyps)) otherResObjs
+instance (ResponseSpec resSpec, ResponseSpecs resSpecs) => ResponseSpecs (resSpec ': resSpecs) where
+  type AllResponseObjects (resSpec ': resSpecs) = ResponseObject resSpec ': AllResponseObjects resSpecs
 
-  {-
-    matchRoundRobin :: Eq a => [a] -> [a] -> Bool
-    matchRoundRobin [] _ys = False
-    matchRoundRobin (x : xs) ys = x `elem` ys || match xs ys
+instance ResponseSpecs resSpecs => ResponseSpec (Sum resSpecs) where
+  type ResponseObject (Sum resSpecs) = Sum (AllResponseObjects resSpecs)
 
-    matchWrong :: Eq a => [a] -> [a] -> Bool
-    matchWrong [] [] = False
-    matchWrong [x] (y : ys) = x == y || matchWrong [x] ys
-    matchWrong xs [] = False
-    matchWrong (x : xs) (y : ys) = x == y || matchWrong xs ys
 
-    matchCorresponding :: Eq a => [a] -> [a] -> Bool
-    matchCorresponding (x : xs) (y : ys) = x == y && matchCorresponding xs ys
-    matchCorresponding [] [] = True -- absurd
-    matchCorresponding _ _ = False
-  -}
+class ToRawResponseAll (resSpecs :: [*]) where
+  toRawResponseAll :: MediaType -> Sum (AllResponseObjects resSpecs) -> IO RawResponse
+
+instance ToRawResponseAll '[] where
+  toRawResponseAll _mt = absurdSum
+
+instance (ToRawResponse resSpec, ToRawResponseAll resSpecs) => ToRawResponseAll (resSpec ': resSpecs) where
+  toRawResponseAll mt (This resObj)       = toRawResponse mt resObj
+  toRawResponseAll mt (That otherResObjs) = toRawResponseAll mt otherResObjs
 
 instance
-  ( LiftSum resTyps
-  , Typeable (Sum resObjs)
-  , HasStatusCodesAll resTyps
-  , HasContentTypesAll resTyps
-  , ToRawResponseAll resTyps resObjs
-  ) => ToRawResponse (Sum resTyps) (Sum resObjs) where
+  ( LiftSum resSpecs
+  , Typeable (ResponseObject (Sum resSpecs))
+  , HasStatusCodesAll resSpecs
+  , HasContentTypesAll resSpecs
+  , ToRawResponseAll resSpecs
+  ) => ToRawResponse (Sum resSpecs) where
   toRawResponse = toRawResponseAll
