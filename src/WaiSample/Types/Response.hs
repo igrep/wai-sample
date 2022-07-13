@@ -6,7 +6,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
 
 module WaiSample.Types.Response where
 

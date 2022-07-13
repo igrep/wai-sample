@@ -1,11 +1,13 @@
 {-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DeriveLift            #-}
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 
 module WaiSample.Types
   ( RoutingTable (..)
@@ -49,11 +51,8 @@ instance Applicative RoutingTable where
 
 data Handler where
   Handler
-    :: (ToRawResponse resTyp resObj, FromRawResponse resTyp resObj)
-    => String -> Method -> RoutingTable a -> (a -> IO resObj) -> Handler
-    --                                                ^^^^^^
-    --                                                Text
-    --                                                (Response Status404 Text)
+    :: (ToRawResponse resSpec, FromRawResponse resSpec)
+    => String -> Method -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)
@@ -66,15 +65,15 @@ instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus st
   contentTypes _ = contentTypes (Proxy :: Proxy resTyp)
 
 
-instance (Typeable status, Lift status, IsStatusCode status, ToRawResponse resTyp resObj) => ToRawResponse (WithStatus status resTyp) resObj where
-  toRawResponse mediaType _ res = do
-    rr <- toRawResponse mediaType (Proxy :: Proxy resTyp) (bodyObject res)
+instance (Typeable status, Lift status, IsStatusCode status, ToRawResponse (resTyp, resObj)) => ToRawResponse (WithStatus status resTyp, resObj) where
+  toRawResponse mediaType res = do
+    rr <- toRawResponse @(resTyp, resObj) mediaType res
     return $ RawResponse (Just (toStatusCode (Proxy :: Proxy status))) (rawBody rr)
 
 
-instance (Typeable status, Lift status, IsStatusCode status, FromRawResponse resTyp resObj) => FromRawResponse (WithStatus status resTyp) resObj where
-  fromRawResponse mediaType _ rr = do
-    resObj <- fromRawResponse mediaType (Proxy :: Proxy resTyp) rr
+instance (Typeable status, Lift status, IsStatusCode status, FromRawResponse (resTyp, resObj)) => FromRawResponse (WithStatus status resTyp, resObj) where
+  fromRawResponse mediaType rr = do
+    resObj <- fromRawResponse @(resTyp, resObj) mediaType rr
     rawSt <- maybe (fail "Unexpected status code") return $ rawStatusCode rr
     status <- maybe (fail "Unexpected status code") return $ fromStatusCode rawSt
-    return $ Response status resObj
+    return resObj

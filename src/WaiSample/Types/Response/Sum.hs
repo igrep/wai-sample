@@ -8,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
@@ -216,15 +217,19 @@ class ToRawResponseAll (resSpecs :: [*]) where
 instance ToRawResponseAll '[] where
   toRawResponseAll _mt = absurdSum
 
-instance (ToRawResponse resSpec, ToRawResponseAll resSpecs) => ToRawResponseAll (resSpec ': resSpecs) where
-  toRawResponseAll mt (This resObj)       = toRawResponse mt resObj
-  toRawResponseAll mt (That otherResObjs) = toRawResponseAll mt otherResObjs
+instance
+  ( ToRawResponse resSpec
+  , ToRawResponseAll resSpecs
+  , AllResponseObjects (resSpec ': resSpecs) ~ (ResponseObject resSpec ': AllResponseObjects resSpecs)
+  ) => ToRawResponseAll (resSpec ': resSpecs) where
+  toRawResponseAll mt (This resObj)       = toRawResponse @resSpec mt resObj
+  toRawResponseAll mt (That otherResObjs) = toRawResponseAll @resSpecs mt otherResObjs
+
 
 instance
   ( LiftSum resSpecs
+  , ResponseSpecs resSpecs
   , Typeable (ResponseObject (Sum resSpecs))
-  , HasStatusCodesAll resSpecs
-  , HasContentTypesAll resSpecs
   , ToRawResponseAll resSpecs
   ) => ToRawResponse (Sum resSpecs) where
-  toRawResponse = toRawResponseAll
+  toRawResponse = toRawResponseAll @resSpecs
