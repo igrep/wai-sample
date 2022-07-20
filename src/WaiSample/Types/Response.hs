@@ -70,3 +70,7 @@ instance ToRawResponse (PlainText, T.Text) where
 
 instance FromRawResponse (PlainText, T.Text) where
   fromRawResponse _ = return . TE.decodeUtf8 . BL.toStrict . rawBody
+
+
+instance Typeable a => ToRawResponse (ContentTypes '[], a) where
+  toRawResponse _ _ = fail "Impossible: Empty ContentTypes"
