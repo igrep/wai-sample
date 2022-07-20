@@ -2,6 +2,7 @@
 {-# LANGUAGE ApplicativeDo             #-}
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DeriveLift                #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
@@ -34,17 +35,18 @@ module WaiSample
   , printRoutes
   ) where
 
-import           Data.Aeson                (FromJSON, ToJSON)
-import qualified Data.Aeson                as Json
-import           Data.Functor              (void)
-import           Data.Proxy                (Proxy (Proxy))
-import qualified Data.Text                 as T
-import qualified Data.Text.IO              as TIO
-import           Data.Typeable             (Typeable)
-import           GHC.Generics              (Generic)
-import           Network.HTTP.Types.Method (Method, methodDelete, methodGet,
-                                            methodPatch, methodPost, methodPut)
-import           Web.FormUrlEncoded        (FromForm, ToForm)
+import           Data.Aeson                 (FromJSON, ToJSON)
+import qualified Data.Aeson                 as Json
+import           Data.Functor               (void)
+import           Data.Proxy                 (Proxy (Proxy))
+import qualified Data.Text                  as T
+import qualified Data.Text.IO               as TIO
+import           Data.Typeable              (Typeable)
+import           GHC.Generics               (Generic)
+import           Language.Haskell.TH.Syntax (Lift)
+import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
+                                             methodPatch, methodPost, methodPut)
+import           Web.FormUrlEncoded         (FromForm, ToForm)
 
 import           WaiSample.Routes
 import           WaiSample.Types
@@ -52,26 +54,25 @@ import           WaiSample.Types
 
 sampleRoutes :: [Handler]
 sampleRoutes =
-  [ get @PlainText "index" root (\_ -> return ("index" :: T.Text))
-  , get @(WithStatus Status503 PlainText) "maintenance" (path "maintenance")
-      (\_ -> return $ Response Status503 ("Sorry, we are under maintenance" :: T.Text))
-  , get @PlainText "aboutUs" (path "about/us") (\_ -> return ("About IIJ" :: T.Text))
-  , get @PlainText "aboutUsFinance" (path "about/us/finance") (\_ -> return ("Financial Report 2021" :: T.Text))
-  , get @PlainText "aboutFinance" (path "about/finance") (\_ -> return ("Financial Report 2020 /" :: T.Text))
+  [ get @(PlainText, T.Text) "index" root (\_ -> return "index")
+  , get @(WithStatus Status503 PlainText, T.Text) "maintenance" (path "maintenance")
+      (\_ -> return "Sorry, we are under maintenance")
+  , get @(PlainText, T.Text) "aboutUs" (path "about/us") (\_ -> return "About IIJ")
+  , get @(PlainText, T.Text) "aboutUsFinance" (path "about/us/finance") (\_ -> return "Financial Report 2021")
+  , get @(PlainText, T.Text) "aboutFinance" (path "about/finance") (\_ -> return "Financial Report 2020 /")
   -- TODO: Drop the initial slash?
-  , get @PlainText "aboutFinanceImpossible" (path "/about/finance/impossible") (\_ -> (fail "This should not be executed due to the leading slash" :: IO T.Text))
-  , get @(ContentTypes '[Json, FormUrlEncoded]) "customerId"
+  , get @(PlainText, T.Text) "aboutFinanceImpossible" (path "/about/finance/impossible") (\_ -> fail "This should not be executed due to the leading slash")
+  , get @(ContentTypes '[Json, FormUrlEncoded], Customer) "customerId"
       (path "customer/" *> decimalPiece)
       (return . customerOfId)
-  -- TODO: try: get @(Sum '[Json, WithStatus Status503 (ContentTypes '[Json, FormUrlEncoded])]) @(Sum '[Customer, SampleError]) "customerIdJson"
-  , get @(Sum '[Json, WithStatus Status503 Json]) @(Sum '[Customer, SampleError]) "customerIdJson"
+  , get @(Sum '[(Json, Customer), (WithStatus Status503 Json, SampleError)]) "customerIdJson"
     -- /customer/:id.json
       (path "customer/" *> decimalPiece <* path ".json")
       (\i ->
         if i == 503
           then return . sumLift $ SampleError "Invalid Customer"
           else return . sumLift $ customerOfId i)
-  , get @PlainText "customerTransaction"
+  , get @(PlainText, T.Text) "customerTransaction"
     ( do
         path "customer/"
         cId <- decimalPiece
@@ -82,7 +83,7 @@ sampleRoutes =
     (\(cId, transactionName) ->
       return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
       )
-  , post @PlainText "createProduct"
+  , post @(PlainText, T.Text) "createProduct"
       (path "products")
       (\_ -> return ("Product created" :: T.Text))
   ]
@@ -97,7 +98,7 @@ sampleRoutes =
 data Customer = Customer
   { customerName :: T.Text
   , customerId   :: Integer
-  } deriving (Eq, Generic, Show)
+  } deriving (Eq, Generic, Show, Lift)
 
 instance ToJSON Customer where
   toEncoding = Json.genericToEncoding Json.defaultOptions
@@ -111,7 +112,7 @@ instance FromForm Customer
 
 newtype SampleError = SampleError
   { message :: String
-  } deriving (Eq, Generic, Show)
+  } deriving (Eq, Generic, Show, Lift)
 
 instance ToJSON SampleError where
   toEncoding = Json.genericToEncoding Json.defaultOptions
@@ -135,25 +136,25 @@ extractRoutingTable (Handler _name _method tbl _hdl) = void tbl
 
 
 handler
-  :: forall resTyp resObj a.
-  ( ToRawResponse resTyp resObj
-  , FromRawResponse resTyp resObj
+  :: forall resSpec a.
+  ( ToRawResponse resSpec
+  , FromRawResponse resSpec
   )
-  => String -> Method -> RoutingTable a -> (a -> IO resObj) -> Handler
-handler = Handler @resTyp @resObj @a
+  => String -> Method -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
+handler = Handler @resSpec @a
 
 
 get, post, put, delete, patch
-  :: forall resTyp resObj a.
-  ( ToRawResponse resTyp resObj
-  , FromRawResponse resTyp resObj
+  :: forall resSpec a.
+  ( ToRawResponse resSpec
+  , FromRawResponse resSpec
   )
-  => String -> RoutingTable a -> (a -> IO resObj) -> Handler
-get name    = handler @resTyp @resObj @a name methodGet
-post name   = handler @resTyp @resObj @a name methodPost
-put name    = handler @resTyp @resObj @a name methodPut
-delete name = handler @resTyp @resObj @a name methodDelete
-patch name  = handler @resTyp @resObj @a name methodPatch
+  => String -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
+get name    = handler @resSpec @a name methodGet
+post name   = handler @resSpec @a name methodPost
+put name    = handler @resSpec @a name methodPut
+delete name = handler @resSpec @a name methodDelete
+patch name  = handler @resSpec @a name methodPatch
 
 
 printRoutes :: IO ()

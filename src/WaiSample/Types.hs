@@ -65,15 +65,15 @@ instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus st
   contentTypes _ = contentTypes (Proxy :: Proxy resTyp)
 
 
-instance (Typeable status, Lift status, IsStatusCode status, ToRawResponse (resTyp, resObj)) => ToRawResponse (WithStatus status resTyp, resObj) where
+instance (Typeable status, Lift status, IsStatusCode status, HasContentTypes resTyp, Typeable resObj, ToRawResponse (resTyp, resObj)) => ToRawResponse (WithStatus status resTyp, resObj) where
   toRawResponse mediaType res = do
     rr <- toRawResponse @(resTyp, resObj) mediaType res
     return $ RawResponse (Just (toStatusCode (Proxy :: Proxy status))) (rawBody rr)
 
 
-instance (Typeable status, Lift status, IsStatusCode status, FromRawResponse (resTyp, resObj)) => FromRawResponse (WithStatus status resTyp, resObj) where
+instance (Typeable status, Lift status, IsStatusCode status, HasContentTypes resTyp, Typeable resObj, FromRawResponse (resTyp, resObj)) => FromRawResponse (WithStatus status resTyp, resObj) where
   fromRawResponse mediaType rr = do
     resObj <- fromRawResponse @(resTyp, resObj) mediaType rr
     rawSt <- maybe (fail "Unexpected status code") return $ rawStatusCode rr
-    status <- maybe (fail "Unexpected status code") return $ fromStatusCode rawSt
+    _ <- maybe (fail "Unexpected status code") return $ fromStatusCode @status rawSt
     return resObj
