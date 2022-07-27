@@ -198,38 +198,29 @@ instance (LiftSum as, HasContentTypesAll as) => HasContentTypes (Sum as) where
   contentTypes _ = allContentTypes (Proxy :: Proxy as)
 
 
-class ResponseSpecs (resSpecs :: [*]) where
+class ResponseSpecAll (resSpecs :: [*]) where
   type AllResponseObjects resSpecs :: [*]
 
-instance ResponseSpecs '[] where
+instance (ResponseSpecAll '[]) where
   type AllResponseObjects '[] = '[]
 
-instance (ResponseSpec resSpec, ResponseSpecs resSpecs) => ResponseSpecs (resSpec ': resSpecs) where
-  type AllResponseObjects (resSpec ': resSpecs) = ResponseObject resSpec ': AllResponseObjects resSpecs
+instance
+  ( ResponseSpec (resTyp, resObj)
+  , ResponseSpecAll resSpecs
+  ) => ResponseSpecAll ((resTyp, resObj) ': resSpecs) where
+  type AllResponseObjects ((resTyp, resObj) ': resSpecs) = resObj ': AllResponseObjects resSpecs
 
-instance ResponseSpecs resSpecs => ResponseSpec (Sum resSpecs) where
+instance ResponseSpecAll resSpecs => ResponseSpec (Sum resSpecs) where
   type ResponseObject (Sum resSpecs) = Sum (AllResponseObjects resSpecs)
 
-
-class ToRawResponseAll (resSpecs :: [*]) where
-  toRawResponseAll :: MediaType -> Sum (AllResponseObjects resSpecs) -> IO RawResponse
-
-instance ToRawResponseAll '[] where
-  toRawResponseAll _mt = absurdSum
+instance ToRawResponse (Sum '[]) where
+  toRawResponse _ _ = fail "Impossible: Empty Sum"
 
 instance
-  ( ToRawResponse resSpec
-  , ToRawResponseAll resSpecs
-  , AllResponseObjects (resSpec ': resSpecs) ~ (ResponseObject resSpec ': AllResponseObjects resSpecs)
-  ) => ToRawResponseAll (resSpec ': resSpecs) where
-  toRawResponseAll mt (This resObj)       = toRawResponse @resSpec mt resObj
-  toRawResponseAll mt (That otherResObjs) = toRawResponseAll @resSpecs mt otherResObjs
-
-
-instance
-  ( LiftSum resSpecs
-  , ResponseSpecs resSpecs
-  , Typeable (ResponseObject (Sum resSpecs))
-  , ToRawResponseAll resSpecs
-  ) => ToRawResponse (Sum resSpecs) where
-  toRawResponse = toRawResponseAll @resSpecs
+  ( Typeable resObj
+  , ToRawResponse (resTyp, resObj)
+  , ToRawResponse (Sum resSpecs)
+  , ResponseSpecAll resSpecs
+  ) => ToRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
+  toRawResponse mt (This resObj)  = _
+  toRawResponse mt (That resObjs) = _

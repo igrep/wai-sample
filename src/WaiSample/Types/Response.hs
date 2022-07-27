@@ -5,7 +5,9 @@
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module WaiSample.Types.Response where
 
@@ -20,6 +22,7 @@ import qualified Network.HTTP.Types.Status    as HTS
 import           Web.FormUrlEncoded           (FromForm, ToForm,
                                                urlDecodeAsForm, urlEncodeAsForm)
 
+import           Data.Proxy                   (Proxy (Proxy))
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Status
 
@@ -45,10 +48,16 @@ instance (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => Resp
   type ResponseObject (resTyp, resObj) = resObj
 
 class ResponseSpec resSpec => ToRawResponse resSpec where
-  toRawResponse :: MediaType -> ResponseObject resSpec -> IO RawResponse
+  toRawResponse
+    :: MediaType {- ^ Media type determined by 'matchAccept' with client's Accept header -}
+    -> ResponseObject resSpec {- ^ Response Object: a value returned by the 'Handler' function. -}
+    -> IO RawResponse
 
 class ResponseSpec resSpec => FromRawResponse resSpec where
-  fromRawResponse :: MediaType -> RawResponse -> IO (ResponseObject resSpec)
+  fromRawResponse
+    :: MediaType {- ^ Media type returned by the server -}
+    -> RawResponse {- ^ Response returned by the server whose body's type is unknown. -}
+    -> IO (ResponseObject resSpec)
 
 
 instance (ToJSON resObj, Typeable resObj) => ToRawResponse (Json, resObj) where
@@ -72,5 +81,37 @@ instance FromRawResponse (PlainText, T.Text) where
   fromRawResponse _ = return . TE.decodeUtf8 . BL.toStrict . rawBody
 
 
-instance Typeable a => ToRawResponse (ContentTypes '[], a) where
+instance Typeable resObj => ToRawResponse (ContentTypes '[], resObj) where
   toRawResponse _ _ = fail "Impossible: Empty ContentTypes"
+
+instance
+  ( Typeable resObj
+  , HasContentTypes contTyp
+  , HasContentTypes (ContentTypes contTyps)
+  , ToRawResponse (contTyp, resObj)
+  , ToRawResponse (ContentTypes contTyps, resObj)
+  ) => ToRawResponse (ContentTypes (contTyp ': contTyps), resObj) where
+  toRawResponse mt resObj =
+    case matchContentType mt (Proxy :: Proxy contTyp) of
+        Just (SomeContentType _contTyp) ->
+          toRawResponse @(contTyp, resObj) mt resObj
+        Nothing ->
+          toRawResponse @(ContentTypes contTyps, resObj) mt resObj
+
+
+instance Typeable resObj => FromRawResponse (ContentTypes '[], resObj) where
+  fromRawResponse _ _ = fail "Impossible: Empty ContentTypes"
+
+instance
+  ( Typeable resObj
+  , HasContentTypes contTyp
+  , HasContentTypes (ContentTypes contTyps)
+  , FromRawResponse (contTyp, resObj)
+  , FromRawResponse (ContentTypes contTyps, resObj)
+  ) => FromRawResponse (ContentTypes (contTyp ': contTyps), resObj) where
+  fromRawResponse mt rr =
+    case matchContentType mt (Proxy :: Proxy contTyp) of
+        Just (SomeContentType _contTyp) ->
+          fromRawResponse @(contTyp, resObj) mt rr
+        Nothing ->
+          fromRawResponse @(ContentTypes contTyps, resObj) mt rr
