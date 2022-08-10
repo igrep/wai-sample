@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeApplications      #-}
@@ -27,10 +28,12 @@ import           Language.Haskell.TH.Syntax   (Lift, lift, liftTyped,
 import           Network.HTTP.Media           (MediaType)
 import qualified Network.HTTP.Types.Status    as HTS
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
-import           WaiSample.Types.Response     (RawResponse, ResponseObject,
-                                               ResponseSpec, ToRawResponse,
+import           WaiSample.Types.Response     (FromRawResponse, RawResponse (RawResponse, rawBody, rawStatusCode),
+                                               ResponseObject, ResponseSpec,
+                                               ToRawResponse, fromRawResponse,
                                                toRawResponse)
-import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
+import           WaiSample.Types.Status       (HasStatusCode (statusCodes),
+                                               StatusCodeInfo)
 
 
 -- [1, 2, 3] :: [Int]
@@ -171,18 +174,18 @@ type family RIndex (a :: *) (as :: [*]) :: Nat where
 data Nat = Z | S Nat
 
 
+{- TODO: 多分要らない
 class HasStatusCodesAll (as :: [*]) where
-  allStatusCodes :: Proxy as -> [HTS.Status]
+  allStatusCodes :: [StatusCodeInfo]
 
 instance HasStatusCodesAll '[] where
-  allStatusCodes _ = []
+  allStatusCodes = []
 
 instance (HasStatusCode a, HasStatusCodesAll as) => HasStatusCodesAll (a ': as) where
-  allStatusCodes _ =
-    statusCodes (Proxy :: Proxy a) ++ allStatusCodes (Proxy :: Proxy as)
+  allStatusCodes = statusCodes @a ++ allStatusCodes @as
 
 instance HasStatusCodesAll as => HasStatusCode (Sum as) where
-  statusCodes _ = allStatusCodes (Proxy :: Proxy as)
+  statusCodes = allStatusCodes @as
 
 
 class HasContentTypesAll (as :: [*]) where
@@ -196,6 +199,7 @@ instance (HasContentTypes a, HasContentTypesAll as) => HasContentTypesAll (a ': 
 
 instance (LiftSum as, HasContentTypesAll as) => HasContentTypes (Sum as) where
   contentTypes _ = allContentTypes (Proxy :: Proxy as)
+-}
 
 
 class ResponseSpecAll (resSpecs :: [*]) where
@@ -213,6 +217,7 @@ instance
 instance ResponseSpecAll resSpecs => ResponseSpec (Sum resSpecs) where
   type ResponseObject (Sum resSpecs) = Sum (AllResponseObjects resSpecs)
 
+
 instance ToRawResponse (Sum '[]) where
   toRawResponse _ _ = fail "Impossible: Empty Sum"
 
@@ -222,5 +227,22 @@ instance
   , ToRawResponse (Sum resSpecs)
   , ResponseSpecAll resSpecs
   ) => ToRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
-  toRawResponse mt (This resObj)  = _
-  toRawResponse mt (That resObjs) = _
+  toRawResponse mt (This resObj)  = toRawResponse @(resTyp, resObj) mt resObj
+  toRawResponse mt (That resObjs) = toRawResponse @(Sum resSpecs) mt resObjs
+
+
+instance FromRawResponse (Sum '[]) where
+  fromRawResponse _ _ = fail "Impossible: Empty Sum"
+
+instance
+  ( Typeable resObj
+  , HasStatusCode resTyp
+  , HasContentTypes resTyp
+  , FromRawResponse (resTyp, resObj)
+  , FromRawResponse (Sum resSpecs)
+  , ResponseSpecAll resSpecs
+  ) => FromRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
+  fromRawResponse mt RawResponse { rawStatusCode, rawBody } = _
+    -- TODO: HasStatusCode resTyp, HasContentTypes resTyp を利用して、
+    --       rawStatusCodeとmtにマッチするケースを探し、
+    --       マッチしたresTypでfromRawResponse

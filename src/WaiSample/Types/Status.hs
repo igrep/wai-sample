@@ -1,14 +1,22 @@
 {-# LANGUAGE DeriveLift #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module WaiSample.Types.Status where
 
 import           Data.Proxy                 (Proxy)
-import           Language.Haskell.TH.Syntax (Lift)
+import qualified Data.ByteString.Char8 as B
+import           Language.Haskell.TH (stringE)
+import           Language.Haskell.TH.Syntax (Lift, liftTyped, unsafeTExpCoerce)
 import qualified Network.HTTP.Types.Status  as HTS
 
 
--- TODO: 多分使っていない
-data DefaultStatus = DefaultStatus deriving (Show, Eq, Lift)
+data StatusCodeInfo = DefaultStatus | NonDefaultStatus HTS.Status deriving (Show, Eq)
+
+instance Lift StatusCodeInfo where
+  liftTyped DefaultStatus = [|| DefaultStatus ||]
+  liftTyped (NonDefaultStatus (HTS.Status sc sm)) =
+    [|| NonDefaultStatus (HTS.mkStatus sc $ B.pack $$(unsafeTExpCoerce . stringE $ B.unpack sm)) ||]
 
 class IsStatusCode status where
   toStatusCode :: Proxy status -> HTS.Status
@@ -38,6 +46,7 @@ instance IsStatusCode Status503 where
   toStatusCode _ = HTS.status503
   fromStatusCode st = if st == HTS.status503 then Just Status503 else Nothing
 
+-- TODO: Overlappableにして、HasStatusCodeのインスタンスを逐一定義しなくてよくする（あるいは意識しなくてもよくする）。
 class HasStatusCode resTyp where
-  statusCodes :: Proxy resTyp -> [HTS.Status]
-  statusCodes _ = []
+  statusCodes :: [StatusCodeInfo]
+  statusCodes = [DefaultStatus]

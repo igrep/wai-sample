@@ -33,7 +33,7 @@ data Response status resObj = Response
   -- TODO: Add other header etc.
 
 data RawResponse = RawResponse
-  { rawStatusCode :: Maybe HTS.Status
+  { rawStatusCode :: StatusCodeInfo
   , rawBody       :: BL.ByteString
   } deriving (Show, Eq)
 
