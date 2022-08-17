@@ -41,7 +41,6 @@ import           Data.Functor               (void)
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import qualified Data.Text.IO               as TIO
-import           Data.Typeable              (Typeable)
 import           GHC.Generics               (Generic)
 import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
@@ -132,7 +131,7 @@ showRoutes :: [Handler] -> T.Text
 showRoutes = ("/" <>) . T.intercalate "\n/" . map (showRoutes' . extractRoutingTable)
 
 extractRoutingTable :: Handler -> RoutingTable ()
-extractRoutingTable (Handler _name _method tbl _hdl) = void tbl
+extractRoutingTable (Handler _resSpec _name _method tbl _hdl) = void tbl
 
 
 handler
@@ -141,7 +140,7 @@ handler
   , FromRawResponse resSpec
   )
   => String -> Method -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
-handler = Handler @resSpec @a
+handler = Handler (Proxy :: Proxy resSpec)
 
 
 get, post, put, delete, patch

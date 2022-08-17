@@ -242,7 +242,8 @@ instance
   , FromRawResponse (Sum resSpecs)
   , ResponseSpecAll resSpecs
   ) => FromRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
-  fromRawResponse mt RawResponse { rawStatusCode, rawBody } = _
-    -- TODO: HasStatusCode resTyp, HasContentTypes resTyp を利用して、
-    --       rawStatusCodeとmtにマッチするケースを探し、
-    --       マッチしたresTypでfromRawResponse
+  fromRawResponse mt rr@RawResponse { rawStatusCode, rawBody } =
+    if rawStatusCode `elem` statusCodes @resTyp
+        && mt `elem` contentTypes @resTyp
+      then This <$> fromRawResponse @(resTyp, resObj) mt rr
+      else That <$> fromRawResponse @(Sum resSpecs) mt rr

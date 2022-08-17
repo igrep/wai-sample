@@ -18,11 +18,9 @@ import qualified Data.Text                    as T
 import qualified Data.Text.Encoding           as TE
 import           Data.Typeable                (Typeable)
 import           Network.HTTP.Media           (MediaType)
-import qualified Network.HTTP.Types.Status    as HTS
 import           Web.FormUrlEncoded           (FromForm, ToForm,
                                                urlDecodeAsForm, urlEncodeAsForm)
 
-import           Data.Proxy                   (Proxy (Proxy))
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Status
 
@@ -38,22 +36,24 @@ data RawResponse = RawResponse
   } deriving (Show, Eq)
 
 defaultRawResponse :: BL.ByteString -> RawResponse
-defaultRawResponse = RawResponse Nothing
+defaultRawResponse = RawResponse DefaultStatus
 
 
 class ResponseSpec resSpec where
+  type ResponseType resSpec
   type ResponseObject resSpec
 
 instance (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => ResponseSpec (resTyp, resObj) where
+  type ResponseType (resTyp, resObj) = resTyp
   type ResponseObject (resTyp, resObj) = resObj
 
-class ResponseSpec resSpec => ToRawResponse resSpec where
+class (ResponseSpec resSpec, HasStatusCode (ResponseType resSpec), HasContentTypes (ResponseType resSpec)) => ToRawResponse resSpec where
   toRawResponse
     :: MediaType {- ^ Media type determined by 'matchAccept' with client's Accept header -}
     -> ResponseObject resSpec {- ^ Response Object: a value returned by the 'Handler' function. -}
     -> IO RawResponse
 
-class ResponseSpec resSpec => FromRawResponse resSpec where
+class (ResponseSpec resSpec, HasStatusCode (ResponseType resSpec), HasContentTypes (ResponseType resSpec)) => FromRawResponse resSpec where
   fromRawResponse
     :: MediaType {- ^ Media type returned by the server -}
     -> RawResponse {- ^ Response returned by the server whose body's type is unknown. -}
@@ -92,7 +92,7 @@ instance
   , ToRawResponse (ContentTypes contTyps, resObj)
   ) => ToRawResponse (ContentTypes (contTyp ': contTyps), resObj) where
   toRawResponse mt resObj =
-    case matchContentType mt (Proxy :: Proxy contTyp) of
+    case matchContentType @contTyp mt of
         Just (SomeContentType _contTyp) ->
           toRawResponse @(contTyp, resObj) mt resObj
         Nothing ->
@@ -110,7 +110,7 @@ instance
   , FromRawResponse (ContentTypes contTyps, resObj)
   ) => FromRawResponse (ContentTypes (contTyp ': contTyps), resObj) where
   fromRawResponse mt rr =
-    case matchContentType mt (Proxy :: Proxy contTyp) of
+    case matchContentType @contTyp mt of
         Just (SomeContentType _contTyp) ->
           fromRawResponse @(contTyp, resObj) mt rr
         Nothing ->

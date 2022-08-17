@@ -1,5 +1,7 @@
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 
 module WaiSample.Server where
 
@@ -21,6 +23,7 @@ import qualified Network.Wai               as Wai
 import           Network.Wai.Handler.Warp  (runEnv)
 import           Web.HttpApiData           (parseUrlPiece)
 
+import           Data.Data                 (Proxy)
 import           WaiSample
 
 
@@ -43,22 +46,22 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
 
 
 runHandler :: Handler -> Request -> Maybe (IO Wai.Response)
-runHandler (Handler _name method tbl resTyp hdl) req =
+runHandler (Handler (resSpec :: Proxy resSpec) _name method tbl hdl) req =
   act <$> runRoutingTable tbl req
  where
   act x =
     if method == requestMethod req
       then do
-        let mMime = matchAccept (NE.toList (contentTypes resTyp)) acceptHeader
+        let mMime = matchAccept (contentTypes @resSpec) acceptHeader
         case mMime of
             Just mime -> do
               resObj <- hdl x
-              rawRes <- toRawResponse mime resTyp resObj
+              rawRes <- toRawResponse @resSpec mime resObj
               let mst = rawStatusCode rawRes
                   stC =
                     case mst of
-                        Just st -> st
-                        Nothing ->
+                        NonDefaultStatus st -> st
+                        DefaultStatus ->
                           if method == methodPost then HTS.status201 else HTS.status200
               return . responseLBS stC [(hContentType, renderHeader mime)] $ rawBody rawRes
             Nothing ->

@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes       #-}
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveLift                #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -7,6 +8,7 @@
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE StandaloneDeriving        #-}
+{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeOperators             #-}
 
 module WaiSample.Types.ContentTypes where
@@ -25,15 +27,15 @@ data SomeContentType = forall contTyp. HasContentTypes contTyp => SomeContentTyp
 -- TODO: 複数形のHasContentTypesと単数のHasContentTypeで別の型クラスにする
 --       複数形のHasContentTypesにはmatchContentTypeが必要ないっぽい
 class Lift contTyp => HasContentTypes contTyp where
-  contentTypes :: Proxy contTyp -> [MediaType]
+  contentTypes :: [MediaType]
 
   -- TODO: SomeContentTypeがどのcontTypについてのProxyかは引数により自明なので、
   --       Maybe SomeContentTypeではなくBoolを返す
-  matchContentType :: MediaType -> Proxy contTyp -> Maybe SomeContentType
-  matchContentType mt contTypP =
-    case contentTypes contTypP of
+  matchContentType :: MediaType -> Maybe SomeContentType
+  matchContentType mt =
+    case contentTypes @contTyp of
         (first : _)
-          | mt == first -> Just $ SomeContentType contTypP
+          | mt == first -> Just $ SomeContentType (Proxy :: Proxy contTyp)
         _ -> Nothing
 
 
@@ -43,7 +45,7 @@ data Json = Json deriving Lift
 instance HasStatusCode Json
 
 instance HasContentTypes Json where
-  contentTypes _ = ["application" // "json"]
+  contentTypes = ["application" // "json"]
 
 
 data FormUrlEncoded = FormUrlEncoded deriving Lift
@@ -51,7 +53,7 @@ data FormUrlEncoded = FormUrlEncoded deriving Lift
 instance HasStatusCode FormUrlEncoded
 
 instance HasContentTypes FormUrlEncoded where
-  contentTypes _ = ["application" // "x-www-form-urlencoded"]
+  contentTypes = ["application" // "x-www-form-urlencoded"]
 
 
 data PlainText = PlainText deriving Lift
@@ -59,7 +61,7 @@ data PlainText = PlainText deriving Lift
 instance HasStatusCode PlainText
 
 instance HasContentTypes PlainText where
-  contentTypes _ = ["text" // "plain" /: ("charset", "UTF-8")]
+  contentTypes = ["text" // "plain" /: ("charset", "UTF-8")]
 
 
 data ContentTypes (contTyps :: [*])
@@ -69,15 +71,14 @@ deriving instance Lift (ContentTypes contTyps)
 instance HasStatusCode (ContentTypes contTyps)
 
 instance HasContentTypes (ContentTypes '[]) where
-  contentTypes _ = []
-  matchContentType _ _ =
-    Nothing
+  contentTypes = []
+  matchContentType _ = Nothing
 
 instance
   ( HasContentTypes contTyp
   , HasContentTypes (ContentTypes contTyps)
   ) => HasContentTypes (ContentTypes (contTyp ': contTyps)) where
-  contentTypes _ = contentTypes (Proxy :: Proxy contTyp) <> contentTypes (Proxy :: Proxy (ContentTypes contTyps))
-  matchContentType mt _contTypP =
-    matchContentType mt (Proxy :: Proxy contTyp)
-      <|> matchContentType mt (Proxy :: Proxy (ContentTypes contTyps))
+  contentTypes = contentTypes @contTyp <> contentTypes @(ContentTypes contTyps)
+  matchContentType mt =
+    matchContentType @contTyp mt
+      <|> matchContentType @(ContentTypes contTyps) mt
