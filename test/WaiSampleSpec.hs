@@ -19,6 +19,7 @@ import           Test.Syd                  (Spec, around, describe, it)
 import           WaiSample.Server          (sampleApp)
 
 
+-- TODO: Sum ((resTyp, resObj) ': resSpecs) の中に、有効な (resTyp, resObj) がない場合に型エラーを起こすこと
 spec :: Spec
 spec =
   describe "sampleApp" . around (withWaiApp sampleApp) $ do
