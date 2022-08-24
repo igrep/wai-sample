@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE DeriveLift                #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
@@ -47,6 +48,7 @@ import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
                                              methodPatch, methodPost, methodPut)
 import           Web.FormUrlEncoded         (FromForm, ToForm)
 
+import           Data.Typeable              (Typeable)
 import           WaiSample.Routes
 import           WaiSample.Types
 
@@ -138,6 +140,9 @@ handler
   :: forall resSpec a.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
+  , Typeable (ResponseObject resSpec)
+  , HasStatusCode (ResponseType resSpec)
+  , HasContentTypes (ResponseType resSpec)
   )
   => String -> Method -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
 handler = Handler (Proxy :: Proxy resSpec)
@@ -147,6 +152,9 @@ get, post, put, delete, patch
   :: forall resSpec a.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
+  , Typeable (ResponseObject resSpec)
+  , HasStatusCode (ResponseType resSpec)
+  , HasContentTypes (ResponseType resSpec)
   )
   => String -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
 get name    = handler @resSpec @a name methodGet

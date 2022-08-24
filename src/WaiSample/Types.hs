@@ -51,8 +51,13 @@ instance Applicative RoutingTable where
 
 data Handler where
   Handler
-    :: (ToRawResponse resSpec, FromRawResponse resSpec)
-    -- TODO: Proxyに書くのはresTypだけ
+    ::
+      ( ToRawResponse resSpec
+      , FromRawResponse resSpec
+      , Typeable (ResponseObject resSpec)
+      , HasStatusCode (ResponseType resSpec)
+      , HasContentTypes (ResponseType resSpec)
+      )
     => Proxy resSpec -> String -> Method -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
 
 

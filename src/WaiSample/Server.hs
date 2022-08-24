@@ -10,7 +10,6 @@ import           Control.Error.Util        (hush)
 import           Control.Exception         (bracket_)
 import qualified Data.Attoparsec.Text      as AT
 import qualified Data.List                 as L
-import qualified Data.List.NonEmpty        as NE
 import           Data.Maybe                (fromMaybe, listToMaybe, mapMaybe)
 import qualified Data.Text                 as T
 import           Network.HTTP.Media        (matchAccept, renderHeader)
@@ -46,13 +45,13 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
 
 
 runHandler :: Handler -> Request -> Maybe (IO Wai.Response)
-runHandler (Handler (resSpec :: Proxy resSpec) _name method tbl hdl) req =
+runHandler (Handler (_ :: Proxy resSpec) _name method tbl hdl) req =
   act <$> runRoutingTable tbl req
  where
   act x =
     if method == requestMethod req
       then do
-        let mMime = matchAccept (contentTypes @resSpec) acceptHeader
+        let mMime = matchAccept (contentTypes @(ResponseType resSpec)) acceptHeader
         case mMime of
             Just mime -> do
               resObj <- hdl x

@@ -47,13 +47,13 @@ instance (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => Resp
   type ResponseType (resTyp, resObj) = resTyp
   type ResponseObject (resTyp, resObj) = resObj
 
-class (ResponseSpec resSpec, HasStatusCode (ResponseType resSpec), HasContentTypes (ResponseType resSpec)) => ToRawResponse resSpec where
+class ResponseSpec resSpec => ToRawResponse resSpec where
   toRawResponse
     :: MediaType {- ^ Media type determined by 'matchAccept' with client's Accept header -}
     -> ResponseObject resSpec {- ^ Response Object: a value returned by the 'Handler' function. -}
     -> IO RawResponse
 
-class (ResponseSpec resSpec, HasStatusCode (ResponseType resSpec), HasContentTypes (ResponseType resSpec)) => FromRawResponse resSpec where
+class ResponseSpec resSpec => FromRawResponse resSpec where
   fromRawResponse
     :: MediaType {- ^ Media type returned by the server -}
     -> RawResponse {- ^ Response returned by the server whose body's type is unknown. -}

@@ -18,22 +18,18 @@
 module WaiSample.Types.Response.Sum where
 
 import           Data.Kind                    (Constraint)
-import           Data.Proxy                   (Proxy (Proxy))
 import           Data.Type.Bool               (If)
 import           Data.Typeable                (Typeable)
 import           GHC.TypeLits                 (ErrorMessage (..), TypeError)
 import           Language.Haskell.TH          (ExpQ)
 import           Language.Haskell.TH.Syntax   (Lift, lift, liftTyped,
                                                unsafeTExpCoerce)
-import           Network.HTTP.Media           (MediaType)
-import qualified Network.HTTP.Types.Status    as HTS
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
-import           WaiSample.Types.Response     (FromRawResponse, RawResponse (RawResponse, rawBody, rawStatusCode),
+import           WaiSample.Types.Response     (FromRawResponse, RawResponse (RawResponse, rawStatusCode),
                                                ResponseObject, ResponseSpec,
-                                               ToRawResponse, fromRawResponse,
-                                               toRawResponse)
-import           WaiSample.Types.Status       (HasStatusCode (statusCodes),
-                                               StatusCodeInfo)
+                                               ResponseType, ToRawResponse,
+                                               fromRawResponse, toRawResponse)
+import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
 
 -- [1, 2, 3] :: [Int]
@@ -203,18 +199,22 @@ instance (LiftSum as, HasContentTypesAll as) => HasContentTypes (Sum as) where
 
 
 class ResponseSpecAll (resSpecs :: [*]) where
+  type AllResponseTypes resSpecs :: [*]
   type AllResponseObjects resSpecs :: [*]
 
 instance (ResponseSpecAll '[]) where
+  type AllResponseTypes '[] = '[]
   type AllResponseObjects '[] = '[]
 
 instance
   ( ResponseSpec (resTyp, resObj)
   , ResponseSpecAll resSpecs
   ) => ResponseSpecAll ((resTyp, resObj) ': resSpecs) where
+  type AllResponseTypes ((resTyp, resObj) ': resSpecs) = resTyp ': AllResponseTypes resSpecs
   type AllResponseObjects ((resTyp, resObj) ': resSpecs) = resObj ': AllResponseObjects resSpecs
 
 instance ResponseSpecAll resSpecs => ResponseSpec (Sum resSpecs) where
+  type ResponseType (Sum resSpecs) = Sum (AllResponseTypes resSpecs)
   type ResponseObject (Sum resSpecs) = Sum (AllResponseObjects resSpecs)
 
 
@@ -242,8 +242,29 @@ instance
   , FromRawResponse (Sum resSpecs)
   , ResponseSpecAll resSpecs
   ) => FromRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
-  fromRawResponse mt rr@RawResponse { rawStatusCode, rawBody } =
+  fromRawResponse mt rr@RawResponse { rawStatusCode } =
     if rawStatusCode `elem` statusCodes @resTyp
         && mt `elem` contentTypes @resTyp
       then This <$> fromRawResponse @(resTyp, resObj) mt rr
       else That <$> fromRawResponse @(Sum resSpecs) mt rr
+
+
+instance HasStatusCode (Sum '[]) where
+  statusCodes = []
+
+instance
+  ( HasStatusCode resTyp
+  , HasStatusCode (Sum resTyps)
+  ) => HasStatusCode (Sum (resTyp ': resTyps)) where
+  statusCodes = statusCodes @resTyp ++ statusCodes @(Sum resTyps)
+
+
+instance HasContentTypes (Sum '[]) where
+  contentTypes = []
+
+instance
+  ( LiftSum resTyps
+  , HasContentTypes resTyp
+  , HasContentTypes (Sum resTyps)
+  ) => HasContentTypes (Sum (resTyp ': resTyps)) where
+  contentTypes = contentTypes @resTyp ++ contentTypes @(Sum resTyps)

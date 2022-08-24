@@ -13,7 +13,6 @@ import qualified Data.ByteString.Char8      as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.CaseInsensitive       as CI
 import           Data.Char                  (toLower, toUpper)
-import qualified Data.List.NonEmpty         as NE
 import           Data.Maybe                 (fromMaybe)
 import           Data.Proxy                 (Proxy)
 import qualified Data.Text                  as T
@@ -32,6 +31,7 @@ import qualified Network.HTTP.Client        as HC
 import           Network.HTTP.Media         (parseAccept)
 import           Network.HTTP.Types.Method  (Method)
 import qualified Network.URI.Encode         as URI
+import           Safe                       (headNote)
 import           WaiSample
 import           Web.HttpApiData            (toUrlPiece)
 
@@ -40,14 +40,15 @@ declareClient :: String -> [Handler] -> DecsQ
 declareClient prefix = fmap concat . mapM declareEndpointFunction
  where
   declareEndpointFunction :: Handler -> DecsQ
-  declareEndpointFunction (Handler handlerName meth tbl ctype action) = do
+  declareEndpointFunction (Handler (_ :: Proxy resSpec) handlerName meth tbl action) = do
     let funName = mkName $ makeUpName handlerName
         typeRtn = getResponseObjectType action
         typeQRtn = [t| IO |] `appT` typeToTypeQ typeRtn
     sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQRtn tbl
 
     let bd = mkName "bd"
-        defaultMimeType = show . NE.head $ contentTypes ctype
+        emsg = "Default MIME type not defined for " ++ show handlerName
+        defaultMimeType = show . headNote emsg $ contentTypes @(ResponseType resSpec)
     moreArgs <- argumentNamesFromRoutingTable tbl
     let allArgs = varP bd : map varP moreArgs
         p = pathBuilderFromRoutingTable moreArgs tbl
@@ -66,7 +67,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
                     { rawBody = responseBody res
                     , rawStatusCode = Just $ responseStatus res
                     }
-              fromRawResponse contentType ctype rres
+              fromRawResponse contentType rres
           |]
     def <- funD
       funName
