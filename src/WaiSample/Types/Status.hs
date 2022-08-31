@@ -10,13 +10,14 @@ import           Language.Haskell.TH (stringE)
 import           Language.Haskell.TH.Syntax (Lift, liftTyped, unsafeTExpCoerce)
 import qualified Network.HTTP.Types.Status  as HTS
 
+import           WaiSample.Internal (liftHttpStatus)
 
 data StatusCodeInfo = DefaultStatus | NonDefaultStatus HTS.Status deriving (Show, Eq)
 
 instance Lift StatusCodeInfo where
   liftTyped DefaultStatus = [|| DefaultStatus ||]
-  liftTyped (NonDefaultStatus (HTS.Status sc sm)) =
-    [|| NonDefaultStatus (HTS.mkStatus sc $ B.pack $$(unsafeTExpCoerce . stringE $ B.unpack sm)) ||]
+  liftTyped (NonDefaultStatus st) =
+    [|| NonDefaultStatus $$(liftHttpStatus st) ||]
 
 class IsStatusCode status where
   toStatusCode :: Proxy status -> HTS.Status

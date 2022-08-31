@@ -44,6 +44,7 @@ library
       WaiSample.Types.Response.Sum
       WaiSample.Types.ContentTypes
       WaiSample.Types.Status
+      WaiSample.Internal
   hs-source-dirs:
       src
   build-depends:

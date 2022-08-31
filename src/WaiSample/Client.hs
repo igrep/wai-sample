@@ -18,10 +18,10 @@ import           Data.Proxy                 (Proxy)
 import qualified Data.Text                  as T
 import           Data.Typeable              (Typeable, tyConName, typeRep,
                                              typeRepTyCon)
-import           Language.Haskell.TH        (DecsQ, ExpQ, Q, TypeQ, appT,
+import           Language.Haskell.TH        (DecsQ, Q, TypeQ, appT,
                                              clause, funD, mkName, newName,
                                              normalB, sigD, stringE, varE, varP)
-import           Language.Haskell.TH.Syntax (Name)
+import           Language.Haskell.TH.Syntax (Name, unsafeTExpCoerce, unTypeQ)
 import           LiftType                   (liftTypeQ)
 import           Network.HTTP.Client        (Manager, httpLbs, parseUrlThrow,
                                              responseBody, responseHeaders,
@@ -32,8 +32,11 @@ import           Network.HTTP.Media         (parseAccept)
 import           Network.HTTP.Types.Method  (Method)
 import qualified Network.URI.Encode         as URI
 import           Safe                       (headNote)
-import           WaiSample
 import           Web.HttpApiData            (toUrlPiece)
+
+import           WaiSample
+import           WaiSample.Internal
+import Language.Haskell.TH (TExp)
 
 
 declareClient :: String -> [Handler] -> DecsQ
@@ -52,9 +55,11 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     moreArgs <- argumentNamesFromRoutingTable tbl
     let allArgs = varP bd : map varP moreArgs
         p = pathBuilderFromRoutingTable moreArgs tbl
-        implE = [e|
+        defaultStatus = liftHttpStatus $ defaultStatusCodeOf meth
+        u = unsafeTExpCoerce
+        implE = unTypeQ [||
             do
-              res <- $(varE bd) (B.pack $(stringE $ B.unpack meth)) $ URI.encode $(p)
+              res <- $$(u $ varE bd) (B.pack $$(u . stringE $ B.unpack meth)) $ URI.encode $$(p)
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypeFromServer = lookup headerName $ responseHeaders res
                   returnedContentType = fromMaybe (B.pack defaultMimeType) contentTypeFromServer
@@ -65,10 +70,13 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
                 mContentType
               let rres = RawResponse
                     { rawBody = responseBody res
-                    , rawStatusCode = Just $ responseStatus res
+                    , rawStatusCode =
+                      if responseStatus res == $$(defaultStatus)
+                        then DefaultStatus
+                        else NonDefaultStatus $ responseStatus res
                     }
               fromRawResponse contentType rres
-          |]
+          ||]
     def <- funD
       funName
       [clause allArgs (normalB implE) []]
@@ -112,23 +120,25 @@ argumentNamesFromRoutingTable = sequence . reverse . go []
   go qns (ParsedPath proxy) = typeToNameQ proxy : qns
 
 
-pathBuilderFromRoutingTable :: [Name] -> RoutingTable a -> ExpQ
+pathBuilderFromRoutingTable :: [Name] -> RoutingTable a -> Q (TExp String)
 pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
  where
-  go :: RoutingTable b -> SS.State [Name] ExpQ
+  go :: RoutingTable b -> SS.State [Name] (Q (TExp String))
   go (LiteralPath p) =
-    return [e| $(stringE $ T.unpack p) |]
+    return [|| $$(u . stringE $ T.unpack p) ||]
   go (FmapPath _f tbl) =
     go tbl
   go (PurePath _x) =
-    return [e| "" |]
+    return [|| "" ||]
   go (ApPath tblF tblA) = do
     eq0 <- go tblF
     eq1 <- go tblA
-    return [e| $(eq0) ++ $(eq1) |]
+    return [|| $$(eq0) ++ $$(eq1) ||]
   go (ParsedPath _proxy) = do
     arg0 <- popArgs
-    return [e| T.unpack $ toUrlPiece $(varE arg0) |]
+    return [|| T.unpack $ toUrlPiece ($$(u $ varE arg0) :: String) ||]
+
+  u = unsafeTExpCoerce
 
   popArgs :: SS.State [Name] Name
   popArgs = do

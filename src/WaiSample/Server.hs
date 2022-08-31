@@ -14,7 +14,6 @@ import           Data.Maybe                (fromMaybe, listToMaybe, mapMaybe)
 import qualified Data.Text                 as T
 import           Network.HTTP.Media        (matchAccept, renderHeader)
 import           Network.HTTP.Types.Header (hContentType)
-import           Network.HTTP.Types.Method (methodPost)
 import qualified Network.HTTP.Types.Status as HTS
 import           Network.Wai               (Application, Request (requestHeaders, requestMethod),
                                             pathInfo, responseLBS)
@@ -24,6 +23,7 @@ import           Web.HttpApiData           (parseUrlPiece)
 
 import           Data.Data                 (Proxy)
 import           WaiSample
+import           WaiSample.Internal        (defaultStatusCodeOf)
 
 
 sampleApp :: Application
@@ -60,8 +60,7 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl hdl) req =
                   stC =
                     case mst of
                         NonDefaultStatus st -> st
-                        DefaultStatus ->
-                          if method == methodPost then HTS.status201 else HTS.status200
+                        DefaultStatus       -> defaultStatusCodeOf method
               return . responseLBS stC [(hContentType, renderHeader mime)] $ rawBody rawRes
             Nothing ->
               return $ responseLBS HTS.status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable"
