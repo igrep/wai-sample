@@ -54,6 +54,7 @@ data Handler where
     ::
       ( ToRawResponse resSpec
       , FromRawResponse resSpec
+      , Typeable resSpec
       , Typeable (ResponseObject resSpec)
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)

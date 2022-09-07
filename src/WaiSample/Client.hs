@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TypeApplications    #-}
+
 module WaiSample.Client
   ( declareClient
   , Backend
@@ -18,10 +19,11 @@ import           Data.Proxy                 (Proxy)
 import qualified Data.Text                  as T
 import           Data.Typeable              (Typeable, tyConName, typeRep,
                                              typeRepTyCon)
-import           Language.Haskell.TH        (DecsQ, Q, TypeQ, appT,
-                                             clause, funD, mkName, newName,
-                                             normalB, sigD, stringE, varE, varP)
-import           Language.Haskell.TH.Syntax (Name, unsafeTExpCoerce, unTypeQ)
+import           Language.Haskell.TH        (DecsQ, ExpQ, Q, TypeQ, appT,
+                                             appTypeE, clause, funD, mkName,
+                                             newName, normalB, sigD, stringE,
+                                             varE, varP)
+import           Language.Haskell.TH.Syntax (Name, unTypeQ)
 import           LiftType                   (liftTypeQ)
 import           Network.HTTP.Client        (Manager, httpLbs, parseUrlThrow,
                                              responseBody, responseHeaders,
@@ -32,21 +34,19 @@ import           Network.HTTP.Media         (parseAccept)
 import           Network.HTTP.Types.Method  (Method)
 import qualified Network.URI.Encode         as URI
 import           Safe                       (headNote)
-import           Web.HttpApiData            (toUrlPiece)
-
 import           WaiSample
 import           WaiSample.Internal
-import Language.Haskell.TH (TExp)
+import           Web.HttpApiData            (toUrlPiece)
 
 
 declareClient :: String -> [Handler] -> DecsQ
 declareClient prefix = fmap concat . mapM declareEndpointFunction
  where
   declareEndpointFunction :: Handler -> DecsQ
-  declareEndpointFunction (Handler (_ :: Proxy resSpec) handlerName meth tbl action) = do
+  declareEndpointFunction (Handler (_ :: Proxy resSpec) handlerName meth tbl (_action :: a -> IO resObj)) = do
     let funName = mkName $ makeUpName handlerName
-        typeRtn = getResponseObjectType action
-        typeQRtn = [t| IO |] `appT` typeToTypeQ typeRtn
+        typeQResSpec = liftTypeQ @resSpec
+        typeQRtn = [t| IO |] `appT` liftTypeQ @resObj
     sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQRtn tbl
 
     let bd = mkName "bd"
@@ -56,10 +56,9 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     let allArgs = varP bd : map varP moreArgs
         p = pathBuilderFromRoutingTable moreArgs tbl
         defaultStatus = liftHttpStatus $ defaultStatusCodeOf meth
-        u = unsafeTExpCoerce
-        implE = unTypeQ [||
+        implE = [|
             do
-              res <- $$(u $ varE bd) (B.pack $$(u . stringE $ B.unpack meth)) $ URI.encode $$(p)
+              res <- $(varE bd) (B.pack $(stringE $ B.unpack meth)) $ URI.encode $(p)
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypeFromServer = lookup headerName $ responseHeaders res
                   returnedContentType = fromMaybe (B.pack defaultMimeType) contentTypeFromServer
@@ -71,12 +70,12 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
               let rres = RawResponse
                     { rawBody = responseBody res
                     , rawStatusCode =
-                      if responseStatus res == $$(defaultStatus)
+                      if responseStatus res == $(unTypeQ defaultStatus)
                         then DefaultStatus
                         else NonDefaultStatus $ responseStatus res
                     }
-              fromRawResponse contentType rres
-          ||]
+              $([| fromRawResponse |] `appTypeE` typeQResSpec) contentType rres
+          |]
     def <- funD
       funName
       [clause allArgs (normalB implE) []]
@@ -120,25 +119,23 @@ argumentNamesFromRoutingTable = sequence . reverse . go []
   go qns (ParsedPath proxy) = typeToNameQ proxy : qns
 
 
-pathBuilderFromRoutingTable :: [Name] -> RoutingTable a -> Q (TExp String)
+pathBuilderFromRoutingTable :: [Name] -> RoutingTable a -> ExpQ
 pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
  where
-  go :: RoutingTable b -> SS.State [Name] (Q (TExp String))
+  go :: RoutingTable b -> SS.State [Name] ExpQ
   go (LiteralPath p) =
-    return [|| $$(u . stringE $ T.unpack p) ||]
+    return [| $(stringE $ T.unpack p) |]
   go (FmapPath _f tbl) =
     go tbl
   go (PurePath _x) =
-    return [|| "" ||]
+    return [| "" |]
   go (ApPath tblF tblA) = do
     eq0 <- go tblF
     eq1 <- go tblA
-    return [|| $$(eq0) ++ $$(eq1) ||]
+    return [| $(eq0) ++ $(eq1) |]
   go (ParsedPath _proxy) = do
     arg0 <- popArgs
-    return [|| T.unpack $ toUrlPiece ($$(u $ varE arg0) :: String) ||]
-
-  u = unsafeTExpCoerce
+    return [| T.unpack $ toUrlPiece $(varE arg0) |]
 
   popArgs :: SS.State [Name] Name
   popArgs = do

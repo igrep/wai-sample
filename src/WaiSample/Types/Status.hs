@@ -5,9 +5,7 @@
 module WaiSample.Types.Status where
 
 import           Data.Proxy                 (Proxy)
-import qualified Data.ByteString.Char8 as B
-import           Language.Haskell.TH (stringE)
-import           Language.Haskell.TH.Syntax (Lift, liftTyped, unsafeTExpCoerce)
+import           Language.Haskell.TH.Syntax (Lift, liftTyped)
 import qualified Network.HTTP.Types.Status  as HTS
 
 import           WaiSample.Internal (liftHttpStatus)

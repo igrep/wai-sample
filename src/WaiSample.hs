@@ -31,7 +31,6 @@ module WaiSample
 
   , module WaiSample.Types
 
-  , getResponseObjectType
   , showRoutes
   , printRoutes
   ) where
@@ -125,10 +124,6 @@ instance ToForm SampleError
 instance FromForm SampleError
 
 
-getResponseObjectType :: (a -> IO resObj) -> Proxy resObj
-getResponseObjectType _ = Proxy
-
-
 showRoutes :: [Handler] -> T.Text
 showRoutes = ("/" <>) . T.intercalate "\n/" . map (showRoutes' . extractRoutingTable)
 
@@ -140,6 +135,7 @@ handler
   :: forall resSpec a.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
+  , Typeable resSpec
   , Typeable (ResponseObject resSpec)
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
@@ -152,6 +148,7 @@ get, post, put, delete, patch
   :: forall resSpec a.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
+  , Typeable resSpec
   , Typeable (ResponseObject resSpec)
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
