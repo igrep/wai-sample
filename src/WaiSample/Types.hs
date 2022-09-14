@@ -66,13 +66,13 @@ data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lif
 
 -- NOTE: Current implementation has a problem that for example `WithStatus 404 (WithStatus 500 PlainText)` ignores 500. But I'll ignore the problem
 instance IsStatusCode status => HasStatusCode (WithStatus status resTyp) where
-  statusCodes = [NonDefaultStatus $ toStatusCode (Proxy :: Proxy status)]
+  statusCodes = [NonDefaultStatus $ toUntypedStatusCode @status]
 
 instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus status resTyp) where
   contentTypes = contentTypes @resTyp
 
 
-instance
+instance {-# OVERLAPPABLE #-}
   (Typeable status
   , Lift status
   , IsStatusCode status
@@ -82,10 +82,20 @@ instance
   ) => ToRawResponse (WithStatus status resTyp, resObj) where
   toRawResponse mediaType res = do
     rr <- toRawResponse @(resTyp, resObj) mediaType res
-    return $ RawResponse (NonDefaultStatus (toStatusCode (Proxy :: Proxy status))) (rawBody rr)
-
+    return $ RawResponse (NonDefaultStatus (toUntypedStatusCode @status)) (rawBody rr)
 
 instance
+  (Typeable status
+  , Lift status
+  , IsStatusCode status
+  , HasContentTypes resTyp
+  , Typeable resObj
+  , ToRawResponse (resTyp, resObj)
+  ) => ToRawResponse (WithStatus status resTyp, Response status resObj) where
+  toRawResponse mediaType (Response _ res) = toRawResponse @(resTyp, resObj) mediaType res
+
+
+instance {-# OVERLAPPABLE #-}
   (Typeable status
   , Lift status
   , IsStatusCode status
@@ -101,3 +111,14 @@ instance
           NonDefaultStatus st -> return st
     _ <- maybe (fail "Unexpected status code") return $ fromStatusCode @status rawSt
     return resObj
+
+instance
+  (Typeable status
+  , Lift status
+  , IsStatusCode status
+  , HasContentTypes resTyp
+  , Typeable resObj
+  , FromRawResponse (resTyp, resObj)
+  ) => FromRawResponse (WithStatus status resTyp, Response status resObj) where
+  fromRawResponse mediaType rr =
+    Response (toTypedStatusCode @status) <$> fromRawResponse @(WithStatus status resTyp, resObj) mediaType rr

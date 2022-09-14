@@ -30,6 +30,12 @@ data Response status resObj = Response
   } deriving (Show, Eq)
   -- TODO: Add other header etc.
 
+{- TODO:
+newtype Response resTyp resObj = Response
+  { bodyObject :: resObj
+  } deriving (Show, Eq)
+-}
+
 data RawResponse = RawResponse
   { rawStatusCode :: StatusCodeInfo
   , rawBody       :: BL.ByteString
