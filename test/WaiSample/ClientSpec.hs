@@ -14,7 +14,7 @@ import           Test.Syd                 (Spec, aroundAll, describe,
                                            itWithOuter, shouldReturn)
 
 import           WaiSample                (Customer (..), Response (..),
-                                           Status503 (..))
+                                           Status503 (..), sumLift)
 import           WaiSample.Client         (httpClientBackend)
 import           WaiSample.Client.Sample
 import           WaiSample.Server         (sampleApp)
@@ -30,14 +30,9 @@ spec =
         let backend = buildBackend port manager
         sampleIndex backend `shouldReturn` "index"
 
-      -- TODO: Check status code
       itWithOuter "sampleMaintenance returns \"Sorry, we are under maintenance\"" $ \(manager, port) -> do
         let backend = buildBackend port manager
-            res = Response
-                  { bodyObject = "Sorry, we are under maintenance"
-                  , statusCode = Status503
-                  }
-        sampleMaintenance backend `shouldReturn` res
+        sampleMaintenance backend `shouldReturn` "Sorry, we are under maintenance"
 
       itWithOuter "aboutUs returns \"About IIJ\"" $ \(manager, port) -> do
         let backend = buildBackend port manager
@@ -67,7 +62,11 @@ spec =
                 { customerName = "Mr. " <> T.pack (show cId)
                 , customerId = cId
                 }
-          sampleCustomerIdJson backend cId `shouldReturn` expected
+          sampleCustomerIdJson backend cId `shouldReturn` sumLift expected
+
+      -- TODO: customerIdJson should return an Error object
+      -- TODO: customerIdTxt should return a plain text message
+      -- TODO: customerIdTxt should return an error message
 
       itWithOuter "customerTransaction returns a transaction information" $ \(manager, port) -> do
         let backend = buildBackend port manager
