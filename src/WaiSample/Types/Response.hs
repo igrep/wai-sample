@@ -24,17 +24,10 @@ import           Web.FormUrlEncoded           (FromForm, ToForm,
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Status
 
-data Response status resObj = Response
-  { statusCode :: status
-  , bodyObject :: resObj
-  } deriving (Show, Eq)
-  -- TODO: Add other header etc.
-
-{- TODO:
 newtype Response resTyp resObj = Response
   { bodyObject :: resObj
   } deriving (Show, Eq)
--}
+-- TODO: Add other header etc.
 
 data RawResponse = RawResponse
   { rawStatusCode :: StatusCodeInfo
@@ -53,6 +46,10 @@ instance (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => Resp
   type ResponseType (resTyp, resObj) = resTyp
   type ResponseObject (resTyp, resObj) = resObj
 
+instance (HasStatusCode resTyp, HasContentTypes resTyp, Typeable resObj) => ResponseSpec (Response resTyp resObj) where
+  type ResponseType (Response resTyp resObj) = resTyp
+  type ResponseObject (Response resTyp resObj) = Response resTyp resObj
+
 class ResponseSpec resSpec => ToRawResponse resSpec where
   toRawResponse
     :: MediaType {- ^ Media type determined by 'matchAccept' with client's Accept header -}
@@ -69,22 +66,40 @@ class ResponseSpec resSpec => FromRawResponse resSpec where
 instance (ToJSON resObj, Typeable resObj) => ToRawResponse (Json, resObj) where
   toRawResponse _ = return . defaultRawResponse . Json.encode
 
+instance (ToJSON resObj, Typeable resObj) => ToRawResponse (Response Json resObj) where
+  toRawResponse _ = return . defaultRawResponse . Json.encode . bodyObject
+
 instance (FromJSON resObj, Typeable resObj) => FromRawResponse (Json, resObj) where
   fromRawResponse _ = either fail return . Json.eitherDecode' . rawBody
+
+instance (FromJSON resObj, Typeable resObj) => FromRawResponse (Response Json resObj) where
+  fromRawResponse _ = either fail (return . Response) . Json.eitherDecode' . rawBody
 
 
 instance (ToForm resObj, Typeable resObj) => ToRawResponse (FormUrlEncoded, resObj) where
   toRawResponse _ = return . defaultRawResponse . urlEncodeAsForm
 
+instance (ToForm resObj, Typeable resObj) => ToRawResponse (Response FormUrlEncoded resObj) where
+  toRawResponse _ = return . defaultRawResponse . urlEncodeAsForm . bodyObject
+
 instance (FromForm resObj, Typeable resObj) => FromRawResponse (FormUrlEncoded, resObj) where
   fromRawResponse _ = either (fail . T.unpack) return . urlDecodeAsForm . rawBody
+
+instance (FromForm resObj, Typeable resObj) => FromRawResponse (Response FormUrlEncoded resObj) where
+  fromRawResponse _ = either (fail . T.unpack) (return . Response) . urlDecodeAsForm . rawBody
 
 
 instance ToRawResponse (PlainText, T.Text) where
   toRawResponse _ = return . defaultRawResponse . BL.fromStrict . TE.encodeUtf8
 
+instance ToRawResponse (Response PlainText T.Text) where
+  toRawResponse _ = return . defaultRawResponse . BL.fromStrict . TE.encodeUtf8 . bodyObject
+
 instance FromRawResponse (PlainText, T.Text) where
   fromRawResponse _ = return . TE.decodeUtf8 . BL.toStrict . rawBody
+
+instance FromRawResponse (Response PlainText T.Text) where
+  fromRawResponse _ = return . Response . TE.decodeUtf8 . BL.toStrict . rawBody
 
 
 instance Typeable resObj => ToRawResponse (ContentTypes '[], resObj) where
@@ -98,6 +113,23 @@ instance
   , ToRawResponse (ContentTypes contTyps, resObj)
   ) => ToRawResponse (ContentTypes (contTyp ': contTyps), resObj) where
   toRawResponse mt resObj =
+    case matchContentType @contTyp mt of
+        Just (SomeContentType _contTyp) ->
+          toRawResponse @(contTyp, resObj) mt resObj
+        Nothing ->
+          toRawResponse @(ContentTypes contTyps, resObj) mt resObj
+
+instance Typeable resObj => ToRawResponse (Response (ContentTypes '[]) resObj) where
+  toRawResponse _ _ = fail "Impossible: Empty ContentTypes"
+
+instance
+  ( Typeable resObj
+  , HasContentTypes contTyp
+  , HasContentTypes (ContentTypes contTyps)
+  , ToRawResponse (contTyp, resObj)
+  , ToRawResponse (ContentTypes contTyps, resObj)
+  ) => ToRawResponse (Response (ContentTypes (contTyp ': contTyps)) resObj) where
+  toRawResponse mt (Response resObj) =
     case matchContentType @contTyp mt of
         Just (SomeContentType _contTyp) ->
           toRawResponse @(contTyp, resObj) mt resObj
@@ -121,3 +153,20 @@ instance
           fromRawResponse @(contTyp, resObj) mt rr
         Nothing ->
           fromRawResponse @(ContentTypes contTyps, resObj) mt rr
+
+instance Typeable resObj => FromRawResponse (Response (ContentTypes '[]) resObj) where
+  fromRawResponse _ _ = fail "Impossible: Empty ContentTypes"
+
+instance
+  ( Typeable resObj
+  , HasContentTypes contTyp
+  , HasContentTypes (ContentTypes contTyps)
+  , FromRawResponse (contTyp, resObj)
+  , FromRawResponse (ContentTypes contTyps, resObj)
+  ) => FromRawResponse (Response (ContentTypes (contTyp ': contTyps)) resObj) where
+  fromRawResponse mt rr =
+    case matchContentType @contTyp mt of
+        Just (SomeContentType _contTyp) ->
+          Response <$> fromRawResponse @(contTyp, resObj) mt rr
+        Nothing ->
+          Response <$> fromRawResponse @(ContentTypes contTyps, resObj) mt rr

@@ -207,11 +207,11 @@ instance (ResponseSpecAll '[]) where
   type AllResponseObjects '[] = '[]
 
 instance
-  ( ResponseSpec (resTyp, resObj)
+  ( ResponseSpec resSpec
   , ResponseSpecAll resSpecs
-  ) => ResponseSpecAll ((resTyp, resObj) ': resSpecs) where
-  type AllResponseTypes ((resTyp, resObj) ': resSpecs) = resTyp ': AllResponseTypes resSpecs
-  type AllResponseObjects ((resTyp, resObj) ': resSpecs) = resObj ': AllResponseObjects resSpecs
+  ) => ResponseSpecAll (resSpec ': resSpecs) where
+  type AllResponseTypes (resSpec ': resSpecs) = ResponseType resSpec ': AllResponseTypes resSpecs
+  type AllResponseObjects (resSpec ': resSpecs) = ResponseObject resSpec ': AllResponseObjects resSpecs
 
 instance ResponseSpecAll resSpecs => ResponseSpec (Sum resSpecs) where
   type ResponseType (Sum resSpecs) = Sum (AllResponseTypes resSpecs)
@@ -222,12 +222,13 @@ instance ToRawResponse (Sum '[]) where
   toRawResponse _ _ = fail "Impossible: Empty Sum"
 
 instance
-  ( Typeable resObj
-  , ToRawResponse (resTyp, resObj)
+  ( ResponseSpec resSpec
+  , Typeable (ResponseObject resSpec)
+  , ToRawResponse resSpec
   , ToRawResponse (Sum resSpecs)
   , ResponseSpecAll resSpecs
-  ) => ToRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
-  toRawResponse mt (This resObj)  = toRawResponse @(resTyp, resObj) mt resObj
+  ) => ToRawResponse (Sum (resSpec ': resSpecs)) where
+  toRawResponse mt (This resObj)  = toRawResponse @resSpec mt resObj
   toRawResponse mt (That resObjs) = toRawResponse @(Sum resSpecs) mt resObjs
 
 
@@ -235,17 +236,18 @@ instance FromRawResponse (Sum '[]) where
   fromRawResponse _ _ = fail "Impossible: Empty Sum"
 
 instance
-  ( Typeable resObj
-  , HasStatusCode resTyp
-  , HasContentTypes resTyp
-  , FromRawResponse (resTyp, resObj)
+  ( ResponseSpec resSpec
+  , Typeable (ResponseObject resSpec)
+  , HasStatusCode (ResponseType resSpec)
+  , HasContentTypes (ResponseType resSpec)
+  , FromRawResponse resSpec
   , FromRawResponse (Sum resSpecs)
   , ResponseSpecAll resSpecs
-  ) => FromRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
+  ) => FromRawResponse (Sum (resSpec ': resSpecs)) where
   fromRawResponse mt rr@RawResponse { rawStatusCode } =
-    if rawStatusCode `elem` statusCodes @resTyp
-        && mt `elem` contentTypes @resTyp
-      then This <$> fromRawResponse @(resTyp, resObj) mt rr
+    if rawStatusCode `elem` statusCodes @(ResponseType resSpec)
+        && mt `elem` contentTypes @(ResponseType resSpec)
+      then This <$> fromRawResponse @resSpec mt rr
       else That <$> fromRawResponse @(Sum resSpecs) mt rr
 
 

@@ -19,7 +19,7 @@ module WaiSample.Types
   , module WaiSample.Types.Status
   ) where
 
-import           Data.Proxy                   (Proxy (Proxy))
+import           Data.Proxy                   (Proxy)
 import qualified Data.Text                    as T
 import           Data.Typeable                (Typeable)
 import           Language.Haskell.TH.Syntax   (Lift)
@@ -72,8 +72,8 @@ instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus st
   contentTypes = contentTypes @resTyp
 
 
-instance {-# OVERLAPPABLE #-}
-  (Typeable status
+instance
+  ( Typeable status
   , Lift status
   , IsStatusCode status
   , HasContentTypes resTyp
@@ -85,18 +85,18 @@ instance {-# OVERLAPPABLE #-}
     return $ RawResponse (NonDefaultStatus (toUntypedStatusCode @status)) (rawBody rr)
 
 instance
-  (Typeable status
+  ( Typeable status
   , Lift status
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
   , ToRawResponse (resTyp, resObj)
-  ) => ToRawResponse (WithStatus status resTyp, Response status resObj) where
-  toRawResponse mediaType (Response _ res) = toRawResponse @(resTyp, resObj) mediaType res
+  ) => ToRawResponse (Response (WithStatus status resTyp) resObj) where
+  toRawResponse mediaType (Response resObj) = toRawResponse @(resTyp, resObj) mediaType resObj
 
 
-instance {-# OVERLAPPABLE #-}
-  (Typeable status
+instance
+  ( Typeable status
   , Lift status
   , IsStatusCode status
   , HasContentTypes resTyp
@@ -113,12 +113,12 @@ instance {-# OVERLAPPABLE #-}
     return resObj
 
 instance
-  (Typeable status
+  ( Typeable status
   , Lift status
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
   , FromRawResponse (resTyp, resObj)
-  ) => FromRawResponse (WithStatus status resTyp, Response status resObj) where
+  ) => FromRawResponse (Response (WithStatus status resTyp) resObj) where
   fromRawResponse mediaType rr =
-    Response (toTypedStatusCode @status) <$> fromRawResponse @(WithStatus status resTyp, resObj) mediaType rr
+    Response <$> fromRawResponse @(WithStatus status resTyp, resObj) mediaType rr
