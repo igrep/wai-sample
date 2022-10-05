@@ -60,11 +60,16 @@ spec =
         property $ \cId -> do
           let expected = Customer
                 { customerName = "Mr. " <> T.pack (show cId)
-                , customerId = cId
+                -- `customerIdJson` returns an Error if cId is 503 as the next test shows.
+                , customerId = if cId == 503 then 504 else cId
                 }
           sampleCustomerIdJson backend cId `shouldReturn` sumLift expected
 
-      -- TODO: customerIdJson should return an Error object
+      itWithOuter "customerIdJson returns an error object if customerId is 503" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            expected = SampleError "Invalid Customer"
+        sampleCustomerIdJson backend 503 `shouldReturn` sumLift expected
+
       -- TODO: customerIdTxt should return a plain text message
       -- TODO: customerIdTxt should return an error message
 
