@@ -4,7 +4,6 @@
 
 module WaiSample.Types.Status where
 
-import           Data.Proxy                 (Proxy)
 import           Language.Haskell.TH.Syntax (Lift, liftTyped)
 import qualified Network.HTTP.Types.Status  as HTS
 

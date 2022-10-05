@@ -15,6 +15,7 @@
 module WaiSample
   ( sampleRoutes
   , Customer (..)
+  , SampleError (..)
 
   , root
   , path

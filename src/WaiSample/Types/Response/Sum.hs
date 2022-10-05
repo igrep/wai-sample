@@ -74,6 +74,21 @@ instance LiftSum as => Lift (Sum as) where
   liftTyped x = unsafeTExpCoerce (liftSum x)
   lift = liftSum
 
+instance Show (Sum '[]) where
+  show _ = ""
+
+-- E.g. That (That (This 90))
+instance (Show a, Show (Sum as)) => Show (Sum (a ': as)) where
+  show (This this) = "This " ++ show this
+  show (That that) = "That (" ++ show that ++ ")"
+
+instance Eq (Sum '[]) where
+  _ == _ = False
+
+instance (Eq a, Eq (Sum as)) => Eq (Sum (a ': as))where
+  This x == This y = x == y
+  That x == That y = x == y
+  _ == _ = False
 
 sumLift :: IsMember a as => a -> Sum as
 sumLift = sumLift'

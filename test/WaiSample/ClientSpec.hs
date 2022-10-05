@@ -13,8 +13,8 @@ import           Test.QuickCheck          (property)
 import           Test.Syd                 (Spec, aroundAll, describe,
                                            itWithOuter, shouldReturn)
 
-import           WaiSample                (Customer (..), Response (..),
-                                           Status503 (..), sumLift)
+import           WaiSample                (Customer (..), sumLift)
+import           WaiSample                (SampleError (SampleError))
 import           WaiSample.Client         (httpClientBackend)
 import           WaiSample.Client.Sample
 import           WaiSample.Server         (sampleApp)
