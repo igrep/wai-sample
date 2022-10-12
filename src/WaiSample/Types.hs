@@ -92,7 +92,8 @@ instance
   , Typeable resObj
   , ToRawResponse (resTyp, resObj)
   ) => ToRawResponse (Response (WithStatus status resTyp) resObj) where
-  toRawResponse mediaType (Response resObj) = toRawResponse @(resTyp, resObj) mediaType resObj
+  toRawResponse mediaType (Response resObj) =
+    toRawResponse @(WithStatus status resTyp, resObj) mediaType resObj
 
 
 instance

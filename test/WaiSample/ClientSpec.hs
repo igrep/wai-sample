@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module WaiSample.ClientSpec
   ( spec
@@ -13,8 +14,10 @@ import           Test.QuickCheck          (property)
 import           Test.Syd                 (Spec, aroundAll, describe,
                                            itWithOuter, shouldReturn)
 
-import           WaiSample                (Customer (..), sumLift)
-import           WaiSample                (SampleError (SampleError))
+import           WaiSample                (Customer (..), PlainText,
+                                           Response (Response),
+                                           SampleError (SampleError), Status503,
+                                           WithStatus, sumLift)
 import           WaiSample.Client         (httpClientBackend)
 import           WaiSample.Client.Sample
 import           WaiSample.Server         (sampleApp)
@@ -70,8 +73,17 @@ spec =
             expected = SampleError "Invalid Customer"
         sampleCustomerIdJson backend 503 `shouldReturn` sumLift expected
 
-      -- TODO: customerIdTxt should return a plain text message
-      -- TODO: customerIdTxt should return an error message
+      itWithOuter "customerIdTxt returns the Customer ID" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+        property $ \cId0 -> do
+          let cId = if cId0 == 503 then 504 else cId0
+              expected = "Customer " <> T.pack (show cId)
+          sampleCustomerIdTxt backend cId `shouldReturn` sumLift expected
+
+      itWithOuter "customerIdTxt returns an error message if customerId is 503" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            expected = Response @(WithStatus Status503 PlainText) ("error" :: T.Text)
+        sampleCustomerIdTxt backend 503 `shouldReturn` sumLift expected
 
       itWithOuter "customerTransaction returns a transaction information" $ \(manager, port) -> do
         let backend = buildBackend port manager
