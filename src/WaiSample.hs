@@ -74,7 +74,7 @@ sampleRoutes =
           then return . sumLift $ SampleError "Invalid Customer"
           else return . sumLift $ customerOfId i)
   , get @(Sum '[(PlainText, T.Text), Response (WithStatus Status503 PlainText) T.Text]) "customerIdTxt"
-    -- /customer/:id.json
+    -- /customer/:id.txt
       (path "customer/" *> decimalPiece <* path ".txt")
       (\i ->
         if i == 503

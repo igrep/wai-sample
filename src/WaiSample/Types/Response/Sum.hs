@@ -185,34 +185,6 @@ type family RIndex (a :: *) (as :: [*]) :: Nat where
 data Nat = Z | S Nat
 
 
-{- TODO: 多分要らない
-class HasStatusCodesAll (as :: [*]) where
-  allStatusCodes :: [StatusCodeInfo]
-
-instance HasStatusCodesAll '[] where
-  allStatusCodes = []
-
-instance (HasStatusCode a, HasStatusCodesAll as) => HasStatusCodesAll (a ': as) where
-  allStatusCodes = statusCodes @a ++ allStatusCodes @as
-
-instance HasStatusCodesAll as => HasStatusCode (Sum as) where
-  statusCodes = allStatusCodes @as
-
-
-class HasContentTypesAll (as :: [*]) where
-  allContentTypes :: Proxy as -> [MediaType]
-
-instance HasContentTypes a => HasContentTypesAll '[a] where
-  allContentTypes _ = contentTypes (Proxy :: Proxy a)
-
-instance (HasContentTypes a, HasContentTypesAll as) => HasContentTypesAll (a ': as) where
-  allContentTypes _ = contentTypes (Proxy :: Proxy a) <> allContentTypes (Proxy :: Proxy as)
-
-instance (LiftSum as, HasContentTypesAll as) => HasContentTypes (Sum as) where
-  contentTypes _ = allContentTypes (Proxy :: Proxy as)
--}
-
-
 class ResponseSpecAll (resSpecs :: [*]) where
   type AllResponseTypes resSpecs :: [*]
   type AllResponseObjects resSpecs :: [*]
