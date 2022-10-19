@@ -4,32 +4,31 @@
 
 module WaiSample.Routes where
 
-import           Data.Proxy      (Proxy (Proxy))
 import qualified Data.Text       as T
 import           Data.Typeable   (Typeable)
 import           Web.HttpApiData (FromHttpApiData, ToHttpApiData)
 
 import           WaiSample.Types
 
-root :: RoutingTable ()
+root :: Route ()
 root = pure ()
 
 
-path :: T.Text -> RoutingTable T.Text
+path :: T.Text -> Route T.Text
 path = LiteralPath
 
 
 -- :id of /for/example/users/:id
-decimalPiece :: RoutingTable Integer
-decimalPiece = ParsedPath Proxy
+decimalPiece :: Route Integer
+decimalPiece = ParsedPath
 
 
-paramPiece :: forall a. (ToHttpApiData a, FromHttpApiData a, Typeable a) => RoutingTable a
-paramPiece = ParsedPath (Proxy :: Proxy a)
+paramPiece :: forall a. (ToHttpApiData a, FromHttpApiData a, Typeable a) => Route a
+paramPiece = ParsedPath
 
-showRoutes' :: RoutingTable a -> T.Text
+showRoutes' :: Route a -> T.Text
 showRoutes' (LiteralPath p)    = p
 showRoutes' (FmapPath _f tbl)  = showRoutes' tbl
 showRoutes' (PurePath _x)      = ""
 showRoutes' (ApPath tblF tblA) = showRoutes' tblF <> showRoutes' tblA
-showRoutes' (ParsedPath _)     = ":param" -- TODO: Name the parameter
+showRoutes' ParsedPath         = ":param" -- TODO: Name the parameter

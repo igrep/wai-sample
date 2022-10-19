@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
@@ -15,7 +16,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.CaseInsensitive       as CI
 import           Data.Char                  (toLower, toUpper)
 import           Data.Maybe                 (fromMaybe)
-import           Data.Proxy                 (Proxy)
+import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import           Data.Typeable              (Typeable, tyConName, typeRep,
                                              typeRepTyCon)
@@ -93,36 +94,36 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
 
 
 -- e.g. Integer -> Integer -> String
-typeQFromRoutingTable :: TypeQ -> RoutingTable a -> TypeQ
+typeQFromRoutingTable :: TypeQ -> Route a -> TypeQ
 typeQFromRoutingTable typeQTail = foldr funcT typeQTail  . reverse . go []
  where
-  go :: [TypeQ] -> RoutingTable b -> [TypeQ]
+  go :: forall b. [TypeQ] -> Route b -> [TypeQ]
   go tqs (LiteralPath _p)   = tqs
   go tqs (FmapPath _f tbl)  = go tqs tbl
   go tqs (PurePath _x)      = tqs
   go tqs (ApPath tblF tblA) =
     let tqs' = go tqs tblF
      in go tqs' tblA
-  go tqs (ParsedPath proxy) = typeToTypeQ proxy : tqs
+  go tqs ParsedPath = liftTypeQ @b : tqs
 
 
-argumentNamesFromRoutingTable :: RoutingTable a -> Q [Name]
+argumentNamesFromRoutingTable :: Route a -> Q [Name]
 argumentNamesFromRoutingTable = sequence . reverse . go []
  where
-  go :: [Q Name] -> RoutingTable b -> [Q Name]
+  go :: forall b. [Q Name] -> Route b -> [Q Name]
   go qns (LiteralPath _p)   = qns
   go qns (FmapPath _f tbl)  = go qns tbl
   go qns (PurePath _x)      = qns
   go qns (ApPath tblF tblA) =
     let qns' = go qns tblF
      in go qns' tblA
-  go qns (ParsedPath proxy) = typeToNameQ proxy : qns
+  go qns ParsedPath = typeToNameQ @b : qns
 
 
-pathBuilderFromRoutingTable :: [Name] -> RoutingTable a -> ExpQ
+pathBuilderFromRoutingTable :: [Name] -> Route a -> ExpQ
 pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
  where
-  go :: RoutingTable b -> SS.State [Name] ExpQ
+  go :: Route b -> SS.State [Name] ExpQ
   go (LiteralPath p) =
     return [| $(stringE $ T.unpack p) |]
   go (FmapPath _f tbl) =
@@ -133,7 +134,7 @@ pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
     eq0 <- go tblF
     eq1 <- go tblA
     return [| $(eq0) ++ $(eq1) |]
-  go (ParsedPath _proxy) = do
+  go ParsedPath = do
     arg0 <- popArgs
     return [| T.unpack $ toUrlPiece $(varE arg0) |]
 
@@ -147,15 +148,11 @@ pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
         return arg0
 
 
-typeToTypeQ :: forall t. Typeable t => Proxy t -> TypeQ
-typeToTypeQ _ = liftTypeQ @t
-
-
-typeToNameQ :: forall t. Typeable t => Proxy t -> Q Name
-typeToNameQ proxy = newName namePrefix
+typeToNameQ :: forall t. Typeable t => Q Name
+typeToNameQ = newName namePrefix
  where
   namePrefix = toLowerFirst $ tyConName tyCon
-  tyCon = typeRepTyCon $ typeRep proxy
+  tyCon = typeRepTyCon $ typeRep (Proxy :: Proxy t)
 
   toLowerFirst :: String -> String
   toLowerFirst (first : left) = toLower first : left

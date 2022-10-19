@@ -10,7 +10,7 @@
 {-# LANGUAGE TypeApplications      #-}
 
 module WaiSample.Types
-  ( RoutingTable (..)
+  ( Route (..)
   , Handler (..)
   , WithStatus (..)
   , module WaiSample.Types.ContentTypes
@@ -32,20 +32,19 @@ import           WaiSample.Types.Response.Sum
 import           WaiSample.Types.Status
 
 
--- TODO: Rename into Route?
-data RoutingTable a where
-  LiteralPath :: T.Text -> RoutingTable T.Text
+data Route a where
+  LiteralPath :: T.Text -> Route T.Text
   -- | '<$>'
-  FmapPath :: (a -> b) -> RoutingTable a -> RoutingTable b
-  PurePath :: a -> RoutingTable a
+  FmapPath :: (a -> b) -> Route a -> Route b
+  PurePath :: a -> Route a
   -- | '<*>'
-  ApPath :: RoutingTable (a -> b) -> RoutingTable a -> RoutingTable b
-  ParsedPath :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => Proxy a -> RoutingTable a
+  ApPath :: Route (a -> b) -> Route a -> Route b
+  ParsedPath :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => Route a
 
-instance Functor RoutingTable where
+instance Functor Route where
   fmap = FmapPath
 
-instance Applicative RoutingTable where
+instance Applicative Route where
   pure = PurePath
   (<*>) = ApPath
 
@@ -59,7 +58,7 @@ data Handler where
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)
       )
-    => Proxy resSpec -> String -> Method -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
+    => Proxy resSpec -> String -> Method -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)

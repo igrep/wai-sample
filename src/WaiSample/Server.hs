@@ -69,14 +69,14 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl hdl) req =
   acceptHeader = fromMaybe "*/*" . L.lookup "Accept" $ requestHeaders req
 
 
-parserFromRoutingTable :: RoutingTable a -> AT.Parser a
+parserFromRoutingTable :: Route a -> AT.Parser a
 parserFromRoutingTable (LiteralPath p) = AT.string p
 parserFromRoutingTable (FmapPath f tbl) = f <$> parserFromRoutingTable tbl
 parserFromRoutingTable (PurePath x) = pure x
 parserFromRoutingTable (ApPath tblF tblA) = parserFromRoutingTable tblF <*> parserFromRoutingTable tblA
-parserFromRoutingTable (ParsedPath _) = parseUrlPiece
+parserFromRoutingTable ParsedPath = parseUrlPiece
 
 
-runRoutingTable :: RoutingTable a -> Request -> Maybe a
+runRoutingTable :: Route a -> Request -> Maybe a
 runRoutingTable tbl =
   hush . AT.parseOnly (parserFromRoutingTable tbl <* AT.endOfInput) . T.intercalate "/" . pathInfo

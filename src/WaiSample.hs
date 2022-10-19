@@ -135,7 +135,7 @@ instance FromForm SampleError
 showRoutes :: [Handler] -> T.Text
 showRoutes = ("/" <>) . T.intercalate "\n/" . map (showRoutes' . extractRoutingTable)
 
-extractRoutingTable :: Handler -> RoutingTable ()
+extractRoutingTable :: Handler -> Route ()
 extractRoutingTable (Handler _resSpec _name _method tbl _hdl) = void tbl
 
 
@@ -148,7 +148,7 @@ handler
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
   )
-  => String -> Method -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
+  => String -> Method -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
 handler = Handler (Proxy :: Proxy resSpec)
 
 
@@ -161,7 +161,7 @@ get, post, put, delete, patch
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
   )
-  => String -> RoutingTable a -> (a -> IO (ResponseObject resSpec)) -> Handler
+  => String -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
 get name    = handler @resSpec @a name methodGet
 post name   = handler @resSpec @a name methodPost
 put name    = handler @resSpec @a name methodPut
