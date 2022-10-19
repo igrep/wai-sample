@@ -72,8 +72,16 @@ spec =
       assertBody expectedBody res
       assertHeader "Content-Type" "application/json" res
 
-    -- TODO: 同じ型に対して複数のContent-Typeで返しうる場合のテスト
-    -- it "GET /customer/:customerId returns application/www-form-urlencoded given application/www-form-urlencoded as the Accept header" . runStateTClientState $ do
+    it "GET /customer/:customerId returns application/x-www-form-urlencoded given application/x-www-form-urlencoded as the Accept header" . runStateTClientState $ do
+      let cId = "1752"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict cId)
+                  `addHeader` ("Accept", "application/x-www-form-urlencoded")
+      res <- request req
+      assertStatus 200 res
+      let expectedBody = "customerId=" <> cId <> "&customerName=Mr.%20" <> cId
+      assertBody expectedBody res
+      assertHeader "Content-Type" "application/x-www-form-urlencoded" res
 
     it "GET /customer/:customerId returns 406 given an unknown Accept header" . runStateTClientState $ do
       let cId = "1752"
