@@ -113,11 +113,9 @@ instance
   , ToRawResponse (ContentTypes contTyps, resObj)
   ) => ToRawResponse (ContentTypes (contTyp ': contTyps), resObj) where
   toRawResponse mt resObj =
-    case matchContentType @contTyp mt of
-        Just (SomeContentType _contTyp) ->
-          toRawResponse @(contTyp, resObj) mt resObj
-        Nothing ->
-          toRawResponse @(ContentTypes contTyps, resObj) mt resObj
+    if matchContentType @contTyp mt
+      then toRawResponse @(contTyp, resObj) mt resObj
+      else toRawResponse @(ContentTypes contTyps, resObj) mt resObj
 
 instance Typeable resObj => ToRawResponse (Response (ContentTypes '[]) resObj) where
   toRawResponse _ _ = fail "Impossible: Empty ContentTypes"
@@ -130,11 +128,9 @@ instance
   , ToRawResponse (ContentTypes contTyps, resObj)
   ) => ToRawResponse (Response (ContentTypes (contTyp ': contTyps)) resObj) where
   toRawResponse mt (Response resObj) =
-    case matchContentType @contTyp mt of
-        Just (SomeContentType _contTyp) ->
-          toRawResponse @(contTyp, resObj) mt resObj
-        Nothing ->
-          toRawResponse @(ContentTypes contTyps, resObj) mt resObj
+    if matchContentType @contTyp mt
+      then toRawResponse @(contTyp, resObj) mt resObj
+      else toRawResponse @(ContentTypes contTyps, resObj) mt resObj
 
 
 instance Typeable resObj => FromRawResponse (ContentTypes '[], resObj) where
@@ -148,11 +144,9 @@ instance
   , FromRawResponse (ContentTypes contTyps, resObj)
   ) => FromRawResponse (ContentTypes (contTyp ': contTyps), resObj) where
   fromRawResponse mt rr =
-    case matchContentType @contTyp mt of
-        Just (SomeContentType _contTyp) ->
-          fromRawResponse @(contTyp, resObj) mt rr
-        Nothing ->
-          fromRawResponse @(ContentTypes contTyps, resObj) mt rr
+    if matchContentType @contTyp mt
+      then fromRawResponse @(contTyp, resObj) mt rr
+      else fromRawResponse @(ContentTypes contTyps, resObj) mt rr
 
 instance Typeable resObj => FromRawResponse (Response (ContentTypes '[]) resObj) where
   fromRawResponse _ _ = fail "Impossible: Empty ContentTypes"
@@ -165,8 +159,6 @@ instance
   , FromRawResponse (ContentTypes contTyps, resObj)
   ) => FromRawResponse (Response (ContentTypes (contTyp ': contTyps)) resObj) where
   fromRawResponse mt rr =
-    case matchContentType @contTyp mt of
-        Just (SomeContentType _contTyp) ->
-          Response <$> fromRawResponse @(contTyp, resObj) mt rr
-        Nothing ->
-          Response <$> fromRawResponse @(ContentTypes contTyps, resObj) mt rr
+    if matchContentType @contTyp mt
+      then Response <$> fromRawResponse @(contTyp, resObj) mt rr
+      else Response <$> fromRawResponse @(ContentTypes contTyps, resObj) mt rr

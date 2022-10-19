@@ -21,22 +21,14 @@ import           Network.HTTP.Media         (MediaType, (//), (/:))
 import           WaiSample.Types.Status
 
 
-data SomeContentType = forall contTyp. HasContentTypes contTyp => SomeContentType (Proxy contTyp)
-
-
--- TODO: 複数形のHasContentTypesと単数のHasContentTypeで別の型クラスにする
---       複数形のHasContentTypesにはmatchContentTypeが必要ないっぽい
 class Lift contTyp => HasContentTypes contTyp where
   contentTypes :: [MediaType]
 
-  -- TODO: SomeContentTypeがどのcontTypについてのProxyかは引数により自明なので、
-  --       Maybe SomeContentTypeではなくBoolを返す
-  matchContentType :: MediaType -> Maybe SomeContentType
+  matchContentType :: MediaType -> Bool
   matchContentType mt =
     case contentTypes @contTyp of
-        (first : _)
-          | mt == first -> Just $ SomeContentType (Proxy :: Proxy contTyp)
-        _ -> Nothing
+        (first : _) -> mt == first
+        _           -> False
 
 
 -- TODO: Remove value constructors in the types in this module.
@@ -72,7 +64,7 @@ instance HasStatusCode (ContentTypes contTyps)
 
 instance HasContentTypes (ContentTypes '[]) where
   contentTypes = []
-  matchContentType _ = Nothing
+  matchContentType _ = False
 
 instance
   ( HasContentTypes contTyp
@@ -81,4 +73,4 @@ instance
   contentTypes = contentTypes @contTyp <> contentTypes @(ContentTypes contTyps)
   matchContentType mt =
     matchContentType @contTyp mt
-      <|> matchContentType @(ContentTypes contTyps) mt
+      || matchContentType @(ContentTypes contTyps) mt
