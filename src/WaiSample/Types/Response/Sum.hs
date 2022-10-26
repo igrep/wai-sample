@@ -17,13 +17,13 @@
 -- | Ref. https://github.com/cdepillabout/world-peace/blob/0596da67d792ccf9f0ddbe44b5ce71b38cbde020/src/Data/WorldPeace/Union.hs
 module WaiSample.Types.Response.Sum where
 
-import           Data.Kind                    (Constraint)
+import           Data.Kind                    (Constraint, Type)
 import           Data.Type.Bool               (If)
 import           Data.Typeable                (Typeable)
 import           GHC.TypeLits                 (ErrorMessage (..), TypeError)
-import           Language.Haskell.TH          (ExpQ)
-import           Language.Haskell.TH.Syntax   (Lift, lift, liftTyped,
-                                               unsafeTExpCoerce)
+import           Language.Haskell.TH          (Exp, Quote)
+import           Language.Haskell.TH.Syntax   (Code (Code), Lift, lift,
+                                               liftTyped, unsafeTExpCoerce)
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
 import           WaiSample.Types.Response     (FromRawResponse, RawResponse (RawResponse, rawStatusCode),
                                                ResponseObject, ResponseSpec,
@@ -34,7 +34,7 @@ import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
 -- [1, 2, 3] :: [Int]
 -- [True, False, True] :: [Bool]
--- [Bool, Int, String] :: [*]
+-- [Bool, Int, String] :: [Type]
 
 -- data [a] = [] | a : [a]
 --      ↓ 昇格
@@ -56,12 +56,12 @@ import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
                           "abc" : ["def"]
 -}
 
-data Sum (as :: [*]) where
+data Sum (as :: [Type]) where
   This :: a -> Sum (a ': as)
   That :: Sum as -> Sum (a ': as)
 
-class LiftSum (as :: [*]) where
-  liftSum :: Sum as -> ExpQ
+class LiftSum (as :: [Type]) where
+  liftSum :: Quote m => Sum as -> m Exp
 
 instance LiftSum '[] where
   liftSum = absurdSum
@@ -71,7 +71,7 @@ instance (Lift a, LiftSum as) => LiftSum (a ': as) where
   liftSum (That that) = [| That $(liftSum that) |]
 
 instance LiftSum as => Lift (Sum as) where
-  liftTyped x = unsafeTExpCoerce (liftSum x)
+  liftTyped x = Code $ unsafeTExpCoerce (liftSum x)
   lift = liftSum
 
 instance Show (Sum '[]) where
@@ -109,7 +109,7 @@ absurdSum u = case u of {}
 
 -- | This is a helpful 'Constraint' synonym to assert that @a@ is a member of
 -- @as@.  You can see how it is used in functions like 'openSumLift'.
-type IsMember (a :: *) (as :: [*]) = (CheckElemIsMember a as, SumElemAt a as (RIndex a as))
+type IsMember (a :: Type) (as :: [Type]) = (CheckElemIsMember a as, SumElemAt a as (RIndex a as))
 
 
 -- | This type family checks whether @a@ is inside @as@ and produces
@@ -117,8 +117,8 @@ type IsMember (a :: *) (as :: [*]) = (CheckElemIsMember a as, SumElemAt a as (RI
 -- if @a@ is a member of @as@. So 'CheckElemIsMember' is only for
 -- better error reporting.
 --
--- type family CheckElemIsMember :: * -> [*] -> Constraint where
-type family CheckElemIsMember (a :: *) (as :: [*]) :: Constraint where
+-- type family CheckElemIsMember :: Type -> [Type] -> Constraint where
+type family CheckElemIsMember (a :: Type) (as :: [Type]) :: Constraint where
   CheckElemIsMember a as =
     If (Elem a as) (() :: Constraint) (TypeError (NoElementError a as))
 
@@ -129,15 +129,15 @@ type family CheckElemIsMember (a :: *) (as :: [*]) :: Constraint where
 -- Refl
 -- >>> Refl :: Elem String '[Double, Char] :~: 'False
 -- Refl
--- type family Elem :: * -> [*] -> Bool where
-type family Elem (a :: *) (as :: [*]) :: Bool where
+-- type family Elem :: Type -> [Type] -> Bool where
+type family Elem (a :: Type) (as :: [Type]) :: Bool where
   Elem _ '[]       = 'False
   Elem x (x ': xs) = 'True
   Elem x (y ': xs) = Elem x xs
 
 
 -- | Text of the error message.
-type NoElementError (r :: *) (rs :: [*]) =
+type NoElementError (r :: Type) (rs :: [Type]) =
         'Text "You require open sum type to contain the following element:"
   ':$$: 'Text "    " ':<>: 'ShowType r
   ':$$: 'Text "However, given list can store elements only of the following types:"
@@ -153,7 +153,7 @@ type NoElementError (r :: *) (rs :: [*]) =
 --
 -- As an end-user, you should never need to implement an additional instance of
 -- this typeclass.
-class (i ~ RIndex a as) => SumElemAt (a :: *) (as :: [*]) (i :: Nat) where
+class (i ~ RIndex a as) => SumElemAt (a :: Type) (as :: [Type]) (i :: Nat) where
   sumLift' :: a -> Sum as
   sumMatch' :: Sum as -> Maybe a
 
@@ -175,7 +175,7 @@ instance
   sumMatch' (That xs) = sumMatch' xs
 
 
-type family RIndex (a :: *) (as :: [*]) :: Nat where
+type family RIndex (a :: Type) (as :: [Type]) :: Nat where
   RIndex r (r ': rs) = 'Z
   RIndex r (s ': rs) = 'S (RIndex r rs)
 
@@ -185,9 +185,9 @@ type family RIndex (a :: *) (as :: [*]) :: Nat where
 data Nat = Z | S Nat
 
 
-class ResponseSpecAll (resSpecs :: [*]) where
-  type AllResponseTypes resSpecs :: [*]
-  type AllResponseObjects resSpecs :: [*]
+class ResponseSpecAll (resSpecs :: [Type]) where
+  type AllResponseTypes resSpecs :: [Type]
+  type AllResponseObjects resSpecs :: [Type]
 
 instance (ResponseSpecAll '[]) where
   type AllResponseTypes '[] = '[]

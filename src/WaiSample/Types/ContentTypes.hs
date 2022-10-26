@@ -13,8 +13,6 @@
 
 module WaiSample.Types.ContentTypes where
 
-import           Control.Applicative        ((<|>))
-import           Data.Proxy                 (Proxy (Proxy))
 import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Media         (MediaType, (//), (/:))
 
