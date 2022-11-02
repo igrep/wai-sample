@@ -16,6 +16,7 @@ module WaiSample.Types.ContentTypes where
 import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Media         (MediaType, (//), (/:))
 
+import           Data.Kind                  (Type)
 import           WaiSample.Types.Status
 
 
@@ -54,7 +55,7 @@ instance HasContentTypes PlainText where
   contentTypes = ["text" // "plain" /: ("charset", "UTF-8")]
 
 
-data ContentTypes (contTyps :: [*])
+data ContentTypes (contTyps :: [Type])
 
 deriving instance Lift (ContentTypes contTyps)
 

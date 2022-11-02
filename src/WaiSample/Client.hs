@@ -20,10 +20,10 @@ import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import           Data.Typeable              (Typeable, tyConName, typeRep,
                                              typeRepTyCon)
-import           Language.Haskell.TH        (DecsQ, ExpQ, Q, TypeQ, appT,
-                                             appTypeE, clause, funD, mkName,
-                                             newName, normalB, sigD, stringE,
-                                             varE, varP)
+import           Language.Haskell.TH        (Code (examineCode), DecsQ, ExpQ, Q,
+                                             TypeQ, appT, appTypeE, clause,
+                                             funD, mkName, newName, normalB,
+                                             sigD, stringE, varE, varP)
 import           Language.Haskell.TH.Syntax (Name, unTypeQ)
 import           LiftType                   (liftTypeQ)
 import           Network.HTTP.Client        (Manager, httpLbs, parseUrlThrow,
@@ -71,7 +71,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
               let rres = RawResponse
                     { rawBody = responseBody res
                     , rawStatusCode =
-                      if responseStatus res == $(unTypeQ defaultStatus)
+                      if responseStatus res == $(unTypeQ $ examineCode defaultStatus)
                         then DefaultStatus
                         else NonDefaultStatus $ responseStatus res
                     }
