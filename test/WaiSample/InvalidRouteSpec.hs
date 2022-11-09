@@ -20,9 +20,10 @@ import           Test.Syd          (Assertion (ExpectationFailed), Spec,
 import           Control.Monad     (when)
 import           Data.List         (isInfixOf, isSuffixOf)
 import           WaiSample         (Sum, decimalPiece, get, path)
+import GHC.Stack (HasCallStack)
 
 
-spec :: Spec
+spec :: HasCallStack => Spec
 spec = describe "WaiSample.Client.Sample.get" $
   it "won't type-check if the resSpec is an empty Sum." $ do
     shouldNotTypecheck $
@@ -39,7 +40,7 @@ shouldNotTypecheck a = do
     Left e@(TypeError msg) ->
       if "(deferred type error)" `isSuffixOf` msg
         then
-          when (isInfixOf "No instance for" msg && isInfixOf "NFData" msg) $
+          when ("NFData" `isInfixOf` msg) $
             throwIO $ ExpectationFailed $ "Make sure the expression has an NFData instance! Full error:\n" ++ msg
         else
           throwIO e
