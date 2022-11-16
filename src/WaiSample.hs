@@ -48,7 +48,6 @@ import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
                                              methodPatch, methodPost, methodPut)
 import           Web.FormUrlEncoded         (FromForm, ToForm)
 
-import           Control.DeepSeq            (NFData)
 import           Data.Typeable              (Typeable)
 import           WaiSample.Routes
 import           WaiSample.Types
@@ -148,7 +147,6 @@ handler
   , Typeable (ResponseObject resSpec)
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
-  , NFData a
   )
   => String -> Method -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
 handler = Handler (Proxy :: Proxy resSpec)
@@ -162,7 +160,6 @@ get, post, put, delete, patch
   , Typeable (ResponseObject resSpec)
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
-  , NFData a
   )
   => String -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
 get name    = handler @resSpec @a name methodGet

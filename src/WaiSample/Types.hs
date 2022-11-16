@@ -26,7 +26,6 @@ import           Language.Haskell.TH.Syntax   (Lift)
 import           Network.HTTP.Types.Method    (Method)
 import           Web.HttpApiData              (FromHttpApiData, ToHttpApiData)
 
-import           Control.DeepSeq              (NFData, rnf)
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Response
 import           WaiSample.Types.Response.Sum
@@ -49,21 +48,6 @@ instance Applicative Route where
   pure = PurePath
   (<*>) = ApPath
 
--- WARNING: This instance is only for using with the shouldNotTypecheck
---          function in InvalidRouteSpec.hs.
-instance NFData a => NFData (Route a) where
-  rnf (LiteralPath a) = rnf a
-
-  -- NOTE: Impossible to evaluate all of the fields!
-  rnf (FmapPath a b)  = seq a (seq b ())
-
-  rnf (PurePath a)    = rnf a
-
-  -- NOTE: Impossible to evaluate all of the fields!
-  rnf (ApPath a b)    = seq a (seq b ())
-
-  rnf ParsedPath      = ()
-
 data Handler where
   Handler
     ::
@@ -73,14 +57,8 @@ data Handler where
       , Typeable (ResponseObject resSpec)
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)
-      , NFData a
       )
     => Proxy resSpec -> String -> Method -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
-
--- WARNING: This instance is only for using with the shouldNotTypecheck
---          function in InvalidRouteSpec.hs.
-instance NFData Handler where
-  rnf (Handler a b c d e) = rnf a <> rnf b <> rnf c <> rnf d <> rnf e
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)
