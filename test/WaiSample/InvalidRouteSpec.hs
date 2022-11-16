@@ -48,6 +48,12 @@ spec = describe "WaiSample.Client.Sample.get" $ do
         (path "customer/" *> decimalPiece)
         (\_ -> return ("text" :: T.Text))
 
+  it "won't type-check if the possible content types don't exist." $ do
+    shouldNotTypecheck $ NfHandler $
+      get @(ContentTypes '[], T.Text) "emptyContentTypes"
+        (path "customer/" *> decimalPiece)
+        (\_ -> return ("text" :: T.Text))
+
 
 shouldNotTypecheck :: NFData a => (() ~ () => a) -> IO ()
 shouldNotTypecheck a = do

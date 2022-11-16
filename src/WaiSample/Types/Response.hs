@@ -102,9 +102,6 @@ instance FromRawResponse (Response PlainText T.Text) where
   fromRawResponse _ = return . Response . TE.decodeUtf8 . BL.toStrict . rawBody
 
 
-instance Typeable resObj => ToRawResponse (ContentTypes '[], resObj) where
-  toRawResponse _ _ = fail "Impossible: Empty ContentTypes"
-
 instance
   ( Typeable resObj
   , HasContentTypes contTyp
@@ -116,9 +113,6 @@ instance
     if matchContentType @contTyp mt
       then toRawResponse @(contTyp, resObj) mt resObj
       else toRawResponse @(ContentTypes contTyps, resObj) mt resObj
-
-instance Typeable resObj => ToRawResponse (Response (ContentTypes '[]) resObj) where
-  toRawResponse _ _ = fail "Impossible: Empty ContentTypes"
 
 instance
   ( Typeable resObj
@@ -133,9 +127,6 @@ instance
       else toRawResponse @(ContentTypes contTyps, resObj) mt resObj
 
 
-instance Typeable resObj => FromRawResponse (ContentTypes '[], resObj) where
-  fromRawResponse _ _ = fail "Impossible: Empty ContentTypes"
-
 instance
   ( Typeable resObj
   , HasContentTypes contTyp
@@ -147,9 +138,6 @@ instance
     if matchContentType @contTyp mt
       then fromRawResponse @(contTyp, resObj) mt rr
       else fromRawResponse @(ContentTypes contTyps, resObj) mt rr
-
-instance Typeable resObj => FromRawResponse (Response (ContentTypes '[]) resObj) where
-  fromRawResponse _ _ = fail "Impossible: Empty ContentTypes"
 
 instance
   ( Typeable resObj

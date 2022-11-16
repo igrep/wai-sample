@@ -61,9 +61,10 @@ deriving instance Lift (ContentTypes contTyps)
 
 instance HasStatusCode (ContentTypes contTyps)
 
-instance HasContentTypes (ContentTypes '[]) where
-  contentTypes = []
-  matchContentType _ = False
+instance {-# OVERLAPPING #-}
+  HasContentTypes contTyp => HasContentTypes (ContentTypes '[contTyp]) where
+  contentTypes = contentTypes @contTyp
+  matchContentType = matchContentType @contTyp
 
 instance
   ( HasContentTypes contTyp
