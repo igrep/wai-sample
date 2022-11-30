@@ -21,6 +21,7 @@ import           Network.HTTP.Media           (MediaType)
 import           Web.FormUrlEncoded           (FromForm, ToForm,
                                                urlDecodeAsForm, urlEncodeAsForm)
 
+import qualified Network.HTTP.Types           as HTS
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Status
 
@@ -102,6 +103,18 @@ instance FromRawResponse (Response PlainText T.Text) where
   fromRawResponse _ = return . Response . TE.decodeUtf8 . BL.toStrict . rawBody
 
 
+instance {-# OVERLAPPING #-}
+  ( Typeable resObj
+  , HasContentTypes contTyp
+  , ToRawResponse (contTyp, resObj)
+  ) => ToRawResponse (ContentTypes '[contTyp], resObj) where
+  toRawResponse mt resObj =
+    if matchContentType @contTyp mt
+      then
+        toRawResponse @(contTyp, resObj) mt resObj
+      else
+        return . RawResponse (NonDefaultStatus HTS.status406) $ BL.pack "406 Not Acceptable"
+
 instance
   ( Typeable resObj
   , HasContentTypes contTyp
@@ -114,6 +127,13 @@ instance
       then toRawResponse @(contTyp, resObj) mt resObj
       else toRawResponse @(ContentTypes contTyps, resObj) mt resObj
 
+instance {-# OVERLAPPING #-}
+  ( Typeable resObj
+  , HasContentTypes contTyp
+  , ToRawResponse (contTyp, resObj)
+  ) => ToRawResponse (Response (ContentTypes '[contTyp]) resObj) where
+  toRawResponse mt (Response resObj) = toRawResponse @(contTyp, resObj) mt resObj
+
 instance
   ( Typeable resObj
   , HasContentTypes contTyp
@@ -121,11 +141,18 @@ instance
   , ToRawResponse (contTyp, resObj)
   , ToRawResponse (ContentTypes contTyps, resObj)
   ) => ToRawResponse (Response (ContentTypes (contTyp ': contTyps)) resObj) where
-  toRawResponse mt (Response resObj) =
-    if matchContentType @contTyp mt
-      then toRawResponse @(contTyp, resObj) mt resObj
-      else toRawResponse @(ContentTypes contTyps, resObj) mt resObj
+  toRawResponse mt (Response resObj) = toRawResponse @(ContentTypes (contTyp ': contTyps), resObj) mt resObj
 
+
+instance {-# OVERLAPPING #-}
+  ( Typeable resObj
+  , HasContentTypes contTyp
+  , FromRawResponse (contTyp, resObj)
+  ) => FromRawResponse (ContentTypes '[contTyp], resObj) where
+  fromRawResponse mt rr =
+    if matchContentType @contTyp mt
+      then fromRawResponse @(contTyp, resObj) mt rr
+      else fail "No content type matched"
 
 instance
   ( Typeable resObj
@@ -139,6 +166,13 @@ instance
       then fromRawResponse @(contTyp, resObj) mt rr
       else fromRawResponse @(ContentTypes contTyps, resObj) mt rr
 
+instance {-# OVERLAPPING #-}
+  ( Typeable resObj
+  , HasContentTypes contTyp
+  , FromRawResponse (contTyp, resObj)
+  ) => FromRawResponse (Response (ContentTypes '[contTyp]) resObj) where
+  fromRawResponse mt rr = Response <$> fromRawResponse @(contTyp, resObj) mt rr
+
 instance
   ( Typeable resObj
   , HasContentTypes contTyp
@@ -146,7 +180,4 @@ instance
   , FromRawResponse (contTyp, resObj)
   , FromRawResponse (ContentTypes contTyps, resObj)
   ) => FromRawResponse (Response (ContentTypes (contTyp ': contTyps)) resObj) where
-  fromRawResponse mt rr =
-    if matchContentType @contTyp mt
-      then Response <$> fromRawResponse @(contTyp, resObj) mt rr
-      else Response <$> fromRawResponse @(ContentTypes contTyps, resObj) mt rr
+  fromRawResponse mt rr = Response <$> fromRawResponse @(ContentTypes (contTyp ': contTyps), resObj) mt rr
