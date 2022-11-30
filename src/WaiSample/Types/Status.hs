@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveLift #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
@@ -44,7 +45,8 @@ instance IsStatusCode Status503 where
   toUntypedStatusCode = HTS.status503
   fromStatusCode st = if st == HTS.status503 then Just Status503 else Nothing
 
--- TODO: Overlappableにして、HasStatusCodeのインスタンスを逐一定義しなくてよくする（あるいは意識しなくてもよくする）。
 class HasStatusCode resTyp where
   statusCodes :: [StatusCodeInfo]
   statusCodes = [DefaultStatus]
+
+instance {-# OVERLAPPABLE #-} HasStatusCode resTyp

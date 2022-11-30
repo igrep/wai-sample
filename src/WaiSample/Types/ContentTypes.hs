@@ -30,26 +30,19 @@ class Lift contTyp => HasContentTypes contTyp where
         _           -> False
 
 
--- TODO: Remove value constructors in the types in this module.
-data Json = Json deriving Lift
-
-instance HasStatusCode Json
+data Json deriving Lift
 
 instance HasContentTypes Json where
   contentTypes = ["application" // "json"]
 
 
-data FormUrlEncoded = FormUrlEncoded deriving Lift
-
-instance HasStatusCode FormUrlEncoded
+data FormUrlEncoded deriving Lift
 
 instance HasContentTypes FormUrlEncoded where
   contentTypes = ["application" // "x-www-form-urlencoded"]
 
 
-data PlainText = PlainText deriving Lift
-
-instance HasStatusCode PlainText
+data PlainText deriving Lift
 
 instance HasContentTypes PlainText where
   contentTypes = ["text" // "plain" /: ("charset", "UTF-8")]
@@ -58,8 +51,6 @@ instance HasContentTypes PlainText where
 data ContentTypes (contTyps :: [Type])
 
 deriving instance Lift (ContentTypes contTyps)
-
-instance HasStatusCode (ContentTypes contTyps)
 
 instance {-# OVERLAPPING #-}
   HasContentTypes contTyp => HasContentTypes (ContentTypes '[contTyp]) where
