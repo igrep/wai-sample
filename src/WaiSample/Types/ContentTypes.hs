@@ -17,7 +17,6 @@ import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Media         (MediaType, (//), (/:))
 
 import           Data.Kind                  (Type)
-import           WaiSample.Types.Status
 
 
 class Lift contTyp => HasContentTypes contTyp where

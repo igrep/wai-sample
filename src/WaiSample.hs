@@ -94,6 +94,11 @@ sampleRoutes =
   , post @(PlainText, T.Text) "createProduct"
       (path "products")
       (\_ -> return ("Product created" :: T.Text))
+
+  -- TODO: X-RateLimit-Reset は 日時型の方が望ましい
+  , get @(Json, WithHeaders '[("X-RateLimit-Limit", Int), ("X-RateLimit-Reset", T.Text)] Customer)
+      (path "customerWithHeaders")
+      (\_ -> return . withHeaders 50 "2022-12-07 17:59" $ customerOfId 999)
   ]
  where
   customerOfId i =

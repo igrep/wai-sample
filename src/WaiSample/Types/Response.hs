@@ -11,17 +11,19 @@
 
 module WaiSample.Types.Response where
 
-import           Data.Aeson                   (FromJSON, ToJSON)
-import qualified Data.Aeson                   as Json
-import qualified Data.ByteString.Lazy.Char8   as BL
-import qualified Data.Text                    as T
-import qualified Data.Text.Encoding           as TE
-import           Data.Typeable                (Typeable)
-import           Network.HTTP.Media           (MediaType)
-import           Web.FormUrlEncoded           (FromForm, ToForm,
-                                               urlDecodeAsForm, urlEncodeAsForm)
+import           Data.Aeson                      (FromJSON, ToJSON)
+import qualified Data.Aeson                      as Json
+import qualified Data.ByteString.Lazy.Char8      as BL
+import qualified Data.Text                       as T
+import qualified Data.Text.Encoding              as TE
+import           Data.Typeable                   (Typeable)
+import           Network.HTTP.Media              (MediaType)
+import           Web.FormUrlEncoded              (FromForm, ToForm,
+                                                  urlDecodeAsForm,
+                                                  urlEncodeAsForm)
 
-import qualified Network.HTTP.Types           as HTS
+import           Network.HTTP.Media.RenderHeader (renderHeader)
+import qualified Network.HTTP.Types              as HTS
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Status
 
@@ -32,10 +34,11 @@ newtype Response resTyp resObj = Response
 
 data RawResponse = RawResponse
   { rawStatusCode :: StatusCodeInfo
+  , rawHeader     :: HTS.ResponseHeaders
   , rawBody       :: BL.ByteString
   } deriving (Show, Eq)
 
-defaultRawResponse :: BL.ByteString -> RawResponse
+defaultRawResponse :: HTS.ResponseHeaders -> BL.ByteString -> RawResponse
 defaultRawResponse = RawResponse DefaultStatus
 
 
@@ -65,10 +68,10 @@ class ResponseSpec resSpec => FromRawResponse resSpec where
 
 
 instance (ToJSON resObj, Typeable resObj) => ToRawResponse (Json, resObj) where
-  toRawResponse _ = return . defaultRawResponse . Json.encode
+  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . Json.encode
 
 instance (ToJSON resObj, Typeable resObj) => ToRawResponse (Response Json resObj) where
-  toRawResponse _ = return . defaultRawResponse . Json.encode . bodyObject
+  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . Json.encode . bodyObject
 
 instance (FromJSON resObj, Typeable resObj) => FromRawResponse (Json, resObj) where
   fromRawResponse _ = either fail return . Json.eitherDecode' . rawBody
@@ -78,10 +81,10 @@ instance (FromJSON resObj, Typeable resObj) => FromRawResponse (Response Json re
 
 
 instance (ToForm resObj, Typeable resObj) => ToRawResponse (FormUrlEncoded, resObj) where
-  toRawResponse _ = return . defaultRawResponse . urlEncodeAsForm
+  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . urlEncodeAsForm
 
 instance (ToForm resObj, Typeable resObj) => ToRawResponse (Response FormUrlEncoded resObj) where
-  toRawResponse _ = return . defaultRawResponse . urlEncodeAsForm . bodyObject
+  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . urlEncodeAsForm . bodyObject
 
 instance (FromForm resObj, Typeable resObj) => FromRawResponse (FormUrlEncoded, resObj) where
   fromRawResponse _ = either (fail . T.unpack) return . urlDecodeAsForm . rawBody
@@ -91,10 +94,10 @@ instance (FromForm resObj, Typeable resObj) => FromRawResponse (Response FormUrl
 
 
 instance ToRawResponse (PlainText, T.Text) where
-  toRawResponse _ = return . defaultRawResponse . BL.fromStrict . TE.encodeUtf8
+  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . BL.fromStrict . TE.encodeUtf8
 
 instance ToRawResponse (Response PlainText T.Text) where
-  toRawResponse _ = return . defaultRawResponse . BL.fromStrict . TE.encodeUtf8 . bodyObject
+  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . BL.fromStrict . TE.encodeUtf8 . bodyObject
 
 instance FromRawResponse (PlainText, T.Text) where
   fromRawResponse _ = return . TE.decodeUtf8 . BL.toStrict . rawBody
@@ -113,7 +116,10 @@ instance {-# OVERLAPPING #-}
       then
         toRawResponse @(contTyp, resObj) mt resObj
       else
-        return . RawResponse (NonDefaultStatus HTS.status406) $ BL.pack "406 Not Acceptable"
+        return $ RawResponse
+          (NonDefaultStatus HTS.status406)
+          [(HTS.hContentType, renderHeader mt)]
+          (BL.pack "406 Not Acceptable")
 
 instance
   ( Typeable resObj
