@@ -81,7 +81,7 @@ instance
   ) => ToRawResponse (WithStatus status resTyp, resObj) where
   toRawResponse mediaType res = do
     rr <- toRawResponse @(resTyp, resObj) mediaType res
-    return $ RawResponse (NonDefaultStatus (toUntypedStatusCode @status)) (rawBody rr)
+    return $ RawResponse (NonDefaultStatus (toUntypedStatusCode @status)) [] (rawBody rr)
 
 instance
   ( Typeable status

@@ -28,9 +28,8 @@ import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Status
 
 newtype Response resTyp resObj = Response
-  { bodyObject :: resObj
+  { responseObject :: resObj
   } deriving (Show, Eq)
--- TODO: Add other header etc.
 
 data RawResponse = RawResponse
   { rawStatusCode :: StatusCodeInfo
@@ -71,7 +70,7 @@ instance (ToJSON resObj, Typeable resObj) => ToRawResponse (Json, resObj) where
   toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . Json.encode
 
 instance (ToJSON resObj, Typeable resObj) => ToRawResponse (Response Json resObj) where
-  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . Json.encode . bodyObject
+  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . Json.encode . responseObject
 
 instance (FromJSON resObj, Typeable resObj) => FromRawResponse (Json, resObj) where
   fromRawResponse _ = either fail return . Json.eitherDecode' . rawBody
@@ -84,7 +83,7 @@ instance (ToForm resObj, Typeable resObj) => ToRawResponse (FormUrlEncoded, resO
   toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . urlEncodeAsForm
 
 instance (ToForm resObj, Typeable resObj) => ToRawResponse (Response FormUrlEncoded resObj) where
-  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . urlEncodeAsForm . bodyObject
+  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . urlEncodeAsForm . responseObject
 
 instance (FromForm resObj, Typeable resObj) => FromRawResponse (FormUrlEncoded, resObj) where
   fromRawResponse _ = either (fail . T.unpack) return . urlDecodeAsForm . rawBody
@@ -97,7 +96,7 @@ instance ToRawResponse (PlainText, T.Text) where
   toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . BL.fromStrict . TE.encodeUtf8
 
 instance ToRawResponse (Response PlainText T.Text) where
-  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . BL.fromStrict . TE.encodeUtf8 . bodyObject
+  toRawResponse mt = return . defaultRawResponse [(HTS.hContentType, renderHeader mt)] . BL.fromStrict . TE.encodeUtf8 . responseObject
 
 instance FromRawResponse (PlainText, T.Text) where
   fromRawResponse _ = return . TE.decodeUtf8 . BL.toStrict . rawBody

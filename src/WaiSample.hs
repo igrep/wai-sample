@@ -96,7 +96,7 @@ sampleRoutes =
       (\_ -> return ("Product created" :: T.Text))
 
   -- TODO: X-RateLimit-Reset は 日時型の方が望ましい
-  , get @(Json, WithHeaders '[("X-RateLimit-Limit", Int), ("X-RateLimit-Reset", T.Text)] Customer)
+  , get @(Json, WithHeaders '[Header "X-RateLimit-Limit" Int, Header "X-RateLimit-Reset" T.Text] Customer)
       (path "customerWithHeaders")
       (\_ -> return . withHeaders 50 "2022-12-07 17:59" $ customerOfId 999)
   ]
