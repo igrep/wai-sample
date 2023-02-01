@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module WaiSample.Types.Response.Headers where
 
@@ -17,16 +18,29 @@ import           GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 
 newtype Header (name :: Symbol) (hdObj :: Type) = Header hdObj
 
-data WithHeaders (headers :: [Type]) (resObj :: Type) where
-  NoHeaders :: resObj -> WithHeaders '[] resObj
-  AddHeader :: header -> WithHeaders headers resObj -> WithHeaders (header ': headers) resObj
+data Headered (headers :: [Type]) (resObj :: Type) where
+  NoHeaders :: resObj -> Headered '[] resObj
+  AddHeader :: header -> Headered headers resObj -> Headered (header ': headers) resObj
 
-class Headered (name :: Symbol) hdObj orig new
+
+-- Ref. https://hackage.haskell.org/package/servant-0.19.1/docs/src/Servant.API.ResponseHeaders.html#AddHeader
+class BuildHeadered (name :: Symbol) hdObj orig new
   | name hdObj orig -> new, new -> name, new -> hdObj, new -> orig where
   headered :: hdObj -> orig -> new
 
-instance {-# OVERLAPPING #-} Headered name hdObj resObj (WithHeaders '[Header name hdObj] resObj) where
+instance {-# OVERLAPPABLE #-}
+  new ~ Headered '[Header name hdObj] resObj =>
+  BuildHeadered
+    name
+    hdObj
+    resObj
+    new where
   headered hdObj resObj = AddHeader (Header @name hdObj) (NoHeaders resObj)
 
--- TODO: https://hackage.haskell.org/package/servant-0.19.1/docs/src/Servant.API.ResponseHeaders.html#AddHeader を参考に直す
-instance Headered name hdObj (WithHeaders headers resObj) (WithHeaders (Header name hdObj ': headers) resObj) where
+instance
+  BuildHeadered
+    name
+    hdObj
+    (Headered (header ': headers) resObj)
+    (Headered (Header name hdObj ': header ': headers) resObj) where
+  headered hdObj = AddHeader (Header @name hdObj)
