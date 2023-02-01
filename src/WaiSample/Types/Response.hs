@@ -11,21 +11,23 @@
 
 module WaiSample.Types.Response where
 
-import           Data.Aeson                      (FromJSON, ToJSON)
-import qualified Data.Aeson                      as Json
-import qualified Data.ByteString.Lazy.Char8      as BL
-import qualified Data.Text                       as T
-import qualified Data.Text.Encoding              as TE
-import           Data.Typeable                   (Typeable)
-import           Network.HTTP.Media              (MediaType)
-import           Web.FormUrlEncoded              (FromForm, ToForm,
-                                                  urlDecodeAsForm,
-                                                  urlEncodeAsForm)
+import           Data.Aeson                       (FromJSON, ToJSON)
+import qualified Data.Aeson                       as Json
+import qualified Data.ByteString.Lazy.Char8       as BL
+import qualified Data.Text                        as T
+import qualified Data.Text.Encoding               as TE
+import           Data.Typeable                    (Typeable)
+import           Network.HTTP.Media               (MediaType)
+import           Web.FormUrlEncoded               (FromForm, ToForm,
+                                                   urlDecodeAsForm,
+                                                   urlEncodeAsForm)
 
-import           Network.HTTP.Media.RenderHeader (renderHeader)
-import qualified Network.HTTP.Types              as HTS
+import           Network.HTTP.Media.RenderHeader  (renderHeader)
+import qualified Network.HTTP.Types               as HTS
 import           WaiSample.Types.ContentTypes
+import           WaiSample.Types.Response.Headers (Header, Headered)
 import           WaiSample.Types.Status
+import           Web.HttpApiData                  (ToHttpApiData)
 
 newtype Response resTyp resObj = Response
   { responseObject :: resObj
@@ -186,3 +188,14 @@ instance
   , FromRawResponse (ContentTypes contTyps, resObj)
   ) => FromRawResponse (Response (ContentTypes (contTyp ': contTyps)) resObj) where
   fromRawResponse mt rr = Response <$> fromRawResponse @(ContentTypes (contTyp ': contTyps), resObj) mt rr
+
+
+instance {-# OVERLAPPING #-}
+  ( Typeable resObj
+  , ToHttpApiData hdObj
+  , ToRawResponse resObj
+  , ResponseSpec (resTyp, resObj)
+  ) => ToRawResponse (resTyp, Headered '[Header name hdObj] resObj) where
+  toRawResponse mt resObj = do
+    rr <- toRawResponse mt resObj
+    return rr { rawHeader = [undefined] }
