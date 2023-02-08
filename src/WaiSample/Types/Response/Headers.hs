@@ -5,15 +5,18 @@
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE KindSignatures         #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TypeApplications       #-}
 {-# LANGUAGE TypeOperators          #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances   #-}
 
 module WaiSample.Types.Response.Headers where
 
-import           Data.Kind    (Type)
-import           Data.Proxy   (Proxy (Proxy))
-import           GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
+import           Data.Kind          (Type)
+import           Data.Proxy         (Proxy (Proxy))
+import           Data.String        (fromString)
+import           GHC.TypeLits       (KnownSymbol, Symbol, symbolVal)
+import qualified Network.HTTP.Types as HT
+import           Web.HttpApiData    (ToHttpApiData, toHeader)
 
 
 newtype Header (name :: Symbol) (hdObj :: Type) = Header hdObj
@@ -44,3 +47,28 @@ instance
     (Headered (header ': headers) resObj)
     (Headered (Header name hdObj ': header ': headers) resObj) where
   headered hdObj = AddHeader (Header @name hdObj)
+
+
+class UnwrapHeadered (headers :: [Type]) (resObj :: Type) where
+  unwrapHeadered :: Headered headers resObj -> ([HT.Header], resObj)
+
+instance UnwrapHeadered '[] resObj where
+  unwrapHeadered (NoHeaders resObj) = ([], resObj)
+
+instance
+  ( UnwrapHeadered headers resObj
+  , KnownSymbol name
+  , ToHttpApiData hdObj
+  )
+  => UnwrapHeadered (Header name hdObj ': headers) resObj where
+  unwrapHeadered (AddHeader header rest) =
+    let (headers, resObj) = unwrapHeadered rest
+     in (toRawHeader header : headers, resObj)
+
+
+toRawHeader
+  :: forall name hdObj
+   . (KnownSymbol name, ToHttpApiData hdObj)
+  => Header name hdObj -> HT.Header
+toRawHeader (Header hdObj) =
+  (fromString $ symbolVal (Proxy @name), toHeader hdObj)

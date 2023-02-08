@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -21,14 +22,15 @@ import           Network.HTTP.Media               (MediaType)
 import           Web.FormUrlEncoded               (FromForm, ToForm,
                                                    urlDecodeAsForm,
                                                    urlEncodeAsForm)
+import           Web.HttpApiData                  (ToHttpApiData)
 
+import           GHC.TypeLits                     (KnownSymbol)
 import           Network.HTTP.Media.RenderHeader  (renderHeader)
 import qualified Network.HTTP.Types               as HT
 
 import           WaiSample.Types.ContentTypes
-import           WaiSample.Types.Response.Headers (Header, Headered)
+import           WaiSample.Types.Response.Headers
 import           WaiSample.Types.Status
-import           Web.HttpApiData                  (ToHttpApiData)
 
 newtype Response resTyp resObj = Response
   { responseObject :: resObj
@@ -36,7 +38,7 @@ newtype Response resTyp resObj = Response
 
 data RawResponse = RawResponse
   { rawStatusCode :: StatusCodeInfo
-  , rawHeader     :: HTS.ResponseHeaders
+  , rawHeaders    :: HT.ResponseHeaders
   , rawBody       :: BL.ByteString
   } deriving (Show, Eq)
 
@@ -191,12 +193,31 @@ instance
   fromRawResponse mt rr = Response <$> fromRawResponse @(ContentTypes (contTyp ': contTyps), resObj) mt rr
 
 
-instance {-# OVERLAPPING #-}
+instance
   ( Typeable resObj
-  , ToHttpApiData hdObj
-  , ToRawResponse resObj
-  , ResponseSpec (resTyp, resObj)
-  ) => ToRawResponse (resTyp, Headered '[Header name hdObj] resObj) where
-  toRawResponse mt resObj = do
-    rr <- toRawResponse mt resObj
-    return rr { rawHeader = [undefined] }
+  , Typeable headers
+  , HasContentTypes resTyp
+  , UnwrapHeadered headers resObj
+  , ToRawResponse (resTyp, resObj)
+  ) => ToRawResponse (resTyp, Headered headers resObj) where
+  toRawResponse mt hdResObj = do
+    let (rawHeaders, resObj) = unwrapHeadered hdResObj
+    rr <- toRawResponse @(resTyp, resObj) mt resObj
+    return rr { rawHeaders }
+
+instance
+  ( Typeable resObj
+  , Typeable headers
+  , HasContentTypes resTyp
+  , UnwrapHeadered headers resObj
+  , ToRawResponse (resTyp, resObj)
+  ) => ToRawResponse (Response resTyp (Headered headers resObj)) where
+  toRawResponse mt (Response hdResObj) = toRawResponse @(resTyp, Headered headers resObj) mt hdResObj
+
+
+instance
+  ( FromRawResponse (resTyp, resObj)
+  ) => FromRawResponse (resTyp, Headered headers resObj) where
+  fromRawResponse mt rr = do
+    resObj <- fromRawResponse @(resTyp, resObj) mt rr
+    either fail return $ tryWrappingWithRawHeaders (rawHeaders rr) resObj
