@@ -216,8 +216,21 @@ instance
 
 
 instance
-  ( FromRawResponse (resTyp, resObj)
+  ( Typeable resObj
+  , Typeable headers
+  , HasContentTypes resTyp
+  , TryWrappingWithHeaders headers resObj
+  , FromRawResponse (resTyp, resObj)
   ) => FromRawResponse (resTyp, Headered headers resObj) where
   fromRawResponse mt rr = do
     resObj <- fromRawResponse @(resTyp, resObj) mt rr
-    either fail return $ tryWrappingWithRawHeaders (rawHeaders rr) resObj
+    either fail return $ tryWrappingWithHeaders (rawHeaders rr) resObj
+
+instance
+  ( Typeable resObj
+  , Typeable headers
+  , HasContentTypes resTyp
+  , TryWrappingWithHeaders headers resObj
+  , FromRawResponse (resTyp, resObj)
+  ) => FromRawResponse (Response resTyp (Headered headers resObj)) where
+  fromRawResponse mt rr = Response <$> fromRawResponse @(resTyp, Headered headers resObj) mt rr

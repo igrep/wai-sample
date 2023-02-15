@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes    #-}
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
@@ -11,12 +12,15 @@
 
 module WaiSample.Types.Response.Headers where
 
+import           Data.Bifunctor     (first)
 import           Data.Kind          (Type)
 import           Data.Proxy         (Proxy (Proxy))
 import           Data.String        (fromString)
+import qualified Data.Text          as T
 import           GHC.TypeLits       (KnownSymbol, Symbol, symbolVal)
 import qualified Network.HTTP.Types as HT
-import           Web.HttpApiData    (ToHttpApiData, toHeader)
+import           Web.HttpApiData    (FromHttpApiData, ToHttpApiData,
+                                     parseHeader, toHeader)
 
 
 newtype Header (name :: Symbol) (hdObj :: Type) = Header hdObj
@@ -66,9 +70,36 @@ instance
      in (toRawHeader header : headers, resObj)
 
 
+class TryWrappingWithHeaders (headers :: [Type]) (resObj :: Type) where
+  tryWrappingWithHeaders :: HT.ResponseHeaders -> resObj -> Either String (Headered headers resObj)
+
+instance TryWrappingWithHeaders '[] resObj where
+  tryWrappingWithHeaders _ = Right . NoHeaders
+
+instance
+  ( TryWrappingWithHeaders headers resObj
+  , KnownSymbol name
+  , FromHttpApiData hdObj
+  )
+  => TryWrappingWithHeaders (Header name hdObj ': headers) resObj where
+  tryWrappingWithHeaders rawHds resObj = do
+    rawHdVal <-
+      case lookup hdName rawHds of
+          Nothing  -> Left $ "No header " ++ show hdName ++ " matched"
+          Just val -> Right val
+    hdVal <- first T.unpack $ parseHeader rawHdVal
+    restHds <- tryWrappingWithHeaders rawHds resObj
+    return $ AddHeader (Header @name hdVal) restHds
+   where
+    hdName = toRawHeaderName @name
+
+
 toRawHeader
   :: forall name hdObj
    . (KnownSymbol name, ToHttpApiData hdObj)
   => Header name hdObj -> HT.Header
-toRawHeader (Header hdObj) =
-  (fromString $ symbolVal (Proxy @name), toHeader hdObj)
+toRawHeader (Header hdObj) = (toRawHeaderName @name, toHeader hdObj)
+
+
+toRawHeaderName :: forall name. KnownSymbol name => HT.HeaderName
+toRawHeaderName = fromString $ symbolVal (Proxy @name)
