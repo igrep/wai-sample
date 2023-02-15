@@ -14,20 +14,23 @@ module WaiSample.Types
   , Handler (..)
   , WithStatus (..)
   , module WaiSample.Types.ContentTypes
+  , module WaiSample.Types.Response.Headers
   , module WaiSample.Types.Response
   , module WaiSample.Types.Response.Sum
   , module WaiSample.Types.Status
   ) where
 
-import           Data.Proxy                   (Proxy)
-import qualified Data.Text                    as T
-import           Data.Typeable                (Typeable)
-import           Language.Haskell.TH.Syntax   (Lift)
-import           Network.HTTP.Types.Method    (Method)
-import           Web.HttpApiData              (FromHttpApiData, ToHttpApiData)
+import           Data.Proxy                       (Proxy)
+import qualified Data.Text                        as T
+import           Data.Typeable                    (Typeable)
+import           Language.Haskell.TH.Syntax       (Lift)
+import           Network.HTTP.Types.Method        (Method)
+import           Web.HttpApiData                  (FromHttpApiData,
+                                                   ToHttpApiData)
 
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Response
+import           WaiSample.Types.Response.Headers
 import           WaiSample.Types.Response.Sum
 import           WaiSample.Types.Status
 

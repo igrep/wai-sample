@@ -63,42 +63,48 @@ sampleRoutes =
   , get @(PlainText, T.Text) "aboutFinance" (path "about/finance") (\_ -> return "Financial Report 2020 /")
   -- TODO: Drop the initial slash?
   , get @(PlainText, T.Text) "aboutFinanceImpossible" (path "/about/finance/impossible") (\_ -> fail "This should not be executed due to the leading slash")
-  , get @(ContentTypes '[Json, FormUrlEncoded], Customer) "customerId"
+  , get @(ContentTypes '[Json, FormUrlEncoded], Customer)
+      "customerId"
       (path "customer/" *> decimalPiece)
       (return . customerOfId)
-  , get @(Sum '[(Json, Customer), (WithStatus Status503 Json, SampleError)]) "customerIdJson"
-    -- /customer/:id.json
+  , get @(Sum '[(Json, Customer), (WithStatus Status503 Json, SampleError)])
+      "customerIdJson"
+      -- /customer/:id.json
       (path "customer/" *> decimalPiece <* path ".json")
       (\i ->
         if i == 503
           then return . sumLift $ SampleError "Invalid Customer"
           else return . sumLift $ customerOfId i)
-  , get @(Sum '[(PlainText, T.Text), Response (WithStatus Status503 PlainText) T.Text]) "customerIdTxt"
-    -- /customer/:id.txt
+  , get @(Sum '[(PlainText, T.Text), Response (WithStatus Status503 PlainText) T.Text])
+      "customerIdTxt"
+      -- /customer/:id.txt
       (path "customer/" *> decimalPiece <* path ".txt")
       (\i ->
         if i == 503
           then return . sumLift $ Response @(WithStatus Status503 PlainText) ("error" :: T.Text)
           else return . sumLift $ "Customer " <> T.pack (show i))
-  , get @(PlainText, T.Text) "customerTransaction"
-    ( do
-        path "customer/"
-        cId <- decimalPiece
-        path "/transaction/"
-        transactionName <- paramPiece
-        pure (cId, transactionName)
-      )
-    (\(cId, transactionName) ->
-      return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
-      )
-  , post @(PlainText, T.Text) "createProduct"
+  , get @(PlainText, T.Text)
+      "customerTransaction"
+      ( do
+          path "customer/"
+          cId <- decimalPiece
+          path "/transaction/"
+          transactionName <- paramPiece
+          pure (cId, transactionName)
+        )
+      (\(cId, transactionName) ->
+        return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
+        )
+  , post @(PlainText, T.Text)
+      "createProduct"
       (path "products")
       (\_ -> return ("Product created" :: T.Text))
 
   -- TODO: X-RateLimit-Reset は 日時型の方が望ましい
-  , get @(Json, WithHeaders '[Header "X-RateLimit-Limit" Int, Header "X-RateLimit-Reset" T.Text] Customer)
-      (path "customerWithHeaders")
-      (\_ -> return . withHeaders 50 "2022-12-07 17:59" $ customerOfId 999)
+  , get @(Json, Headered '[Header "X-RateLimit-Limit" Int, Header "X-RateLimit-Reset" T.Text] Customer)
+      "customerHeadered"
+      (path "customerHeadered")
+      (\_ -> return . headered 50 . headered "2022-12-07 17:59" $ customerOfId 999)
   ]
  where
   customerOfId i =
