@@ -22,9 +22,7 @@ import           Network.HTTP.Media               (MediaType)
 import           Web.FormUrlEncoded               (FromForm, ToForm,
                                                    urlDecodeAsForm,
                                                    urlEncodeAsForm)
-import           Web.HttpApiData                  (ToHttpApiData)
 
-import           GHC.TypeLits                     (KnownSymbol)
 import           Network.HTTP.Media.RenderHeader  (renderHeader)
 import qualified Network.HTTP.Types               as HT
 

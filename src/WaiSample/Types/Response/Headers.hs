@@ -12,15 +12,14 @@
 
 module WaiSample.Types.Response.Headers where
 
-import           Data.Bifunctor     (first)
-import           Data.Kind          (Type)
-import           Data.Proxy         (Proxy (Proxy))
-import           Data.String        (fromString)
-import qualified Data.Text          as T
-import           GHC.TypeLits       (KnownSymbol, Symbol, symbolVal)
-import qualified Network.HTTP.Types as HT
-import           Web.HttpApiData    (FromHttpApiData, ToHttpApiData,
-                                     parseHeader, toHeader)
+import qualified Data.Attoparsec.ByteString as AttoB
+import           Data.Kind                  (Type)
+import           Data.Proxy                 (Proxy (Proxy))
+import           Data.String                (fromString)
+import           GHC.TypeLits               (KnownSymbol, Symbol, symbolVal)
+import qualified Network.HTTP.Types         as HT
+import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData,
+                                             parseHeader, toHeader)
 
 
 newtype Header (name :: Symbol) (hdObj :: Type) = Header hdObj
@@ -87,7 +86,7 @@ instance
       case lookup hdName rawHds of
           Nothing  -> Left $ "No header " ++ show hdName ++ " matched"
           Just val -> Right val
-    hdVal <- first T.unpack $ parseHeader rawHdVal
+    hdVal <- AttoB.parseOnly parseHeader rawHdVal
     restHds <- tryWrappingWithHeaders rawHds resObj
     return $ AddHeader (Header @name hdVal) restHds
    where
