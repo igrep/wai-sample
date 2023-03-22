@@ -25,10 +25,13 @@ import           Language.Haskell.TH          (Exp, Quote)
 import           Language.Haskell.TH.Syntax   (Code (Code), Lift, lift,
                                                liftTyped, unsafeTExpCoerce)
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
-import           WaiSample.Types.Response     (FromRawResponse, RawResponse (RawResponse, rawStatusCode),
+import           WaiSample.Types.Response     (DecodeByResponseSpec,
+                                               EncodeByResponseSpec,
+                                               RawResponse (RawResponse, rawStatusCode),
                                                ResponseObject, ResponseSpec,
-                                               ResponseType, ToRawResponse,
-                                               fromRawResponse, toRawResponse)
+                                               ResponseType,
+                                               decodeByResponseSpec,
+                                               encodeByResponseSpec)
 import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
 
@@ -88,7 +91,7 @@ instance Eq (Sum '[]) where
 instance (Eq a, Eq (Sum as)) => Eq (Sum (a ': as))where
   This x == This y = x == y
   That x == That y = x == y
-  _ == _ = False
+  _ == _           = False
 
 sumLift :: IsMember a as => a -> Sum as
 sumLift = sumLift'
@@ -205,37 +208,37 @@ instance ResponseSpecAll resSpecs => ResponseSpec (Sum resSpecs) where
   type ResponseObject (Sum resSpecs) = Sum (AllResponseObjects resSpecs)
 
 
-instance ToRawResponse (Sum '[]) where
-  toRawResponse _ _ = fail "Impossible: Empty Sum"
+instance DecodeByResponseSpec (Sum '[]) where
+  decodeByResponseSpec _ _ = fail "Impossible: Empty Sum"
 
 instance
   ( ResponseSpec resSpec
   , Typeable (ResponseObject resSpec)
-  , ToRawResponse resSpec
-  , ToRawResponse (Sum resSpecs)
+  , DecodeByResponseSpec resSpec
+  , DecodeByResponseSpec (Sum resSpecs)
   , ResponseSpecAll resSpecs
-  ) => ToRawResponse (Sum (resSpec ': resSpecs)) where
-  toRawResponse mt (This resObj)  = toRawResponse @resSpec mt resObj
-  toRawResponse mt (That resObjs) = toRawResponse @(Sum resSpecs) mt resObjs
+  ) => DecodeByResponseSpec (Sum (resSpec ': resSpecs)) where
+  decodeByResponseSpec mt (This resObj)  = decodeByResponseSpec @resSpec mt resObj
+  decodeByResponseSpec mt (That resObjs) = decodeByResponseSpec @(Sum resSpecs) mt resObjs
 
 
-instance FromRawResponse (Sum '[]) where
-  fromRawResponse _ _ = fail "Impossible: Empty Sum"
+instance EncodeByResponseSpec (Sum '[]) where
+  encodeByResponseSpec _ _ = fail "Impossible: Empty Sum"
 
 instance
   ( ResponseSpec resSpec
   , Typeable (ResponseObject resSpec)
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
-  , FromRawResponse resSpec
-  , FromRawResponse (Sum resSpecs)
+  , EncodeByResponseSpec resSpec
+  , EncodeByResponseSpec (Sum resSpecs)
   , ResponseSpecAll resSpecs
-  ) => FromRawResponse (Sum (resSpec ': resSpecs)) where
-  fromRawResponse mt rr@RawResponse { rawStatusCode } =
+  ) => EncodeByResponseSpec (Sum (resSpec ': resSpecs)) where
+  encodeByResponseSpec mt rr@RawResponse { rawStatusCode } =
     if rawStatusCode `elem` statusCodes @(ResponseType resSpec)
         && mt `elem` contentTypes @(ResponseType resSpec)
-      then This <$> fromRawResponse @resSpec mt rr
-      else That <$> fromRawResponse @(Sum resSpecs) mt rr
+      then This <$> encodeByResponseSpec @resSpec mt rr
+      else That <$> encodeByResponseSpec @(Sum resSpecs) mt rr
 
 
 instance HasStatusCode (Sum '[]) where

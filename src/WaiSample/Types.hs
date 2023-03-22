@@ -80,10 +80,10 @@ instance
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
-  , ToRawResponse (resTyp, resObj)
-  ) => ToRawResponse (WithStatus status resTyp, resObj) where
-  toRawResponse mediaType res = do
-    rr <- toRawResponse @(resTyp, resObj) mediaType res
+  , DecodeByResponseSpec (resTyp, resObj)
+  ) => DecodeByResponseSpec (WithStatus status resTyp, resObj) where
+  decodeByResponseSpec mediaType res = do
+    rr <- decodeByResponseSpec @(resTyp, resObj) mediaType res
     return $ RawResponse (NonDefaultStatus (toUntypedStatusCode @status)) [] (rawBody rr)
 
 instance
@@ -92,10 +92,10 @@ instance
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
-  , ToRawResponse (resTyp, resObj)
-  ) => ToRawResponse (Response (WithStatus status resTyp) resObj) where
-  toRawResponse mediaType (Response resObj) =
-    toRawResponse @(WithStatus status resTyp, resObj) mediaType resObj
+  , DecodeByResponseSpec (resTyp, resObj)
+  ) => DecodeByResponseSpec (Response (WithStatus status resTyp) resObj) where
+  decodeByResponseSpec mediaType (Response resObj) =
+    decodeByResponseSpec @(WithStatus status resTyp, resObj) mediaType resObj
 
 
 instance
@@ -104,10 +104,10 @@ instance
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
-  , FromRawResponse (resTyp, resObj)
-  ) => FromRawResponse (WithStatus status resTyp, resObj) where
-  fromRawResponse mediaType rr = do
-    resObj <- fromRawResponse @(resTyp, resObj) mediaType rr
+  , EncodeByResponseSpec (resTyp, resObj)
+  ) => EncodeByResponseSpec (WithStatus status resTyp, resObj) where
+  encodeByResponseSpec mediaType rr = do
+    resObj <- encodeByResponseSpec @(resTyp, resObj) mediaType rr
     rawSt <-
       case rawStatusCode rr of
           DefaultStatus       -> fail "Unexpected status code"
@@ -121,7 +121,7 @@ instance
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
-  , FromRawResponse (resTyp, resObj)
-  ) => FromRawResponse (Response (WithStatus status resTyp) resObj) where
-  fromRawResponse mediaType rr =
-    Response <$> fromRawResponse @(WithStatus status resTyp, resObj) mediaType rr
+  , EncodeByResponseSpec (resTyp, resObj)
+  ) => EncodeByResponseSpec (Response (WithStatus status resTyp) resObj) where
+  encodeByResponseSpec mediaType rr =
+    Response <$> encodeByResponseSpec @(WithStatus status resTyp, resObj) mediaType rr

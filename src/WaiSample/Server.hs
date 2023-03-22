@@ -12,10 +12,11 @@ import qualified Data.Attoparsec.Text      as AT
 import qualified Data.List                 as L
 import           Data.Maybe                (fromMaybe, listToMaybe, mapMaybe)
 import qualified Data.Text                 as T
-import           Network.HTTP.Media        (matchAccept, renderHeader)
+import           Network.HTTP.Media        (matchAccept)
 import           Network.HTTP.Types.Header (hContentType)
 import qualified Network.HTTP.Types.Status as HTS
-import           Network.Wai               (Application, Request (requestHeaders, requestMethod),
+import           Network.Wai               (Application,
+                                            Request (requestHeaders, requestMethod),
                                             pathInfo, responseLBS)
 import qualified Network.Wai               as Wai
 import           Network.Wai.Handler.Warp  (runEnv)
@@ -61,7 +62,7 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl hdl) req =
                     case mst of
                         NonDefaultStatus st -> st
                         DefaultStatus       -> defaultStatusCodeOf method
-              return . responseLBS stC [(hContentType, renderHeader mime)] $ rawBody rawRes
+              return . responseLBS stC (rawHeaders rawRes) $ rawBody rawRes
             Nothing ->
               return $ responseLBS HTS.status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable"
       else return $ responseLBS HTS.status405 [(hContentType, "text/plain;charset=UTF-8")] "405 Method not allowed."

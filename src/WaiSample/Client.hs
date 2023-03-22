@@ -74,6 +74,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
                       if responseStatus res == $(unTypeQ $ examineCode defaultStatus)
                         then DefaultStatus
                         else NonDefaultStatus $ responseStatus res
+                    , rawHeaders = responseHeaders res
                     }
               $([| fromRawResponse |] `appTypeE` typeQResSpec) contentType rres
           |]

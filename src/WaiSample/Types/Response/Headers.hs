@@ -12,9 +12,6 @@
 
 module WaiSample.Types.Response.Headers where
 
-import           Data.Aeson                 (FromJSON, ToJSON, toEncoding,
-                                             toJSON)
-import           Data.Aeson.Types           (parseJSON)
 import qualified Data.Attoparsec.ByteString as AttoB
 import           Data.Kind                  (Type)
 import           Data.Proxy                 (Proxy (Proxy))
@@ -30,13 +27,6 @@ newtype Header (name :: Symbol) (hdObj :: Type) = Header hdObj
 data Headered (headers :: [Type]) (resObj :: Type) where
   NoHeaders :: resObj -> Headered '[] resObj
   AddHeader :: header -> Headered headers resObj -> Headered (header ': headers) resObj
-
-instance (HasHeaders headers, ToJSON resObj) => ToJSON (Headered headers resObj) where
-  toJSON (NoHeaders resObj) = toJSON $ unwrapHeaders @headers resObj
-  toEncoding (NoHeaders resObj) = toEncoding $ unwrapHeaders @headers resObj
-
-instance (HasHeaders headers, FromJSON resObj) => FromJSON (Headered headers resObj) where
-  parseJSON = fmap wrapWithHeaders @headers . parseJSON
 
 
 -- Ref. https://hackage.haskell.org/package/servant-0.19.1/docs/src/Servant.API.ResponseHeaders.html#AddHeader
