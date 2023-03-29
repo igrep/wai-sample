@@ -42,6 +42,7 @@ import           Data.Functor               (void)
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import qualified Data.Text.IO               as TIO
+import           Data.Time.Clock            (UTCTime)
 import           GHC.Generics               (Generic)
 import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
@@ -49,6 +50,7 @@ import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
 import           Web.FormUrlEncoded         (FromForm, ToForm)
 
 import           Data.Typeable              (Typeable)
+
 import           WaiSample.Routes
 import           WaiSample.Types
 
@@ -100,11 +102,14 @@ sampleRoutes =
       (path "products")
       (\_ -> return ("Product created" :: T.Text))
 
-  -- TODO: X-RateLimit-Reset は 日時型の方が望ましい
-  , get @(Json, Headered '[Header "X-RateLimit-Limit" Int, Header "X-RateLimit-Reset" T.Text] Customer)
+  , get @(Json, Headered '[Header "X-RateLimit-Limit" Int, Header "X-RateLimit-Reset" UTCTime] Customer)
       "customerHeadered"
       (path "customerHeadered")
-      (\_ -> return . headered 50 . headered "2022-12-07 17:59" $ customerOfId 999)
+      (\_ -> do
+        let rateLimitReset = undefined -- TODO
+        return . headered 50 . headered rateLimitReset $ customerOfId 999
+        )
+  -- TODO: WithStatus, ContentTypes, Sumと組み合わせた場合のハンドラー
   ]
  where
   customerOfId i =

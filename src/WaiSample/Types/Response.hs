@@ -221,6 +221,7 @@ instance
   toRawResponse mt hdResObj = do
     let (rawHeaders, resObj) = unwrapHeadered hdResObj
     rr <- decodeByResponseSpec @(resTyp, resObj) mt resObj
+    -- TODO: Fix headers
     return rr { rawHeaders }
 
 instance
