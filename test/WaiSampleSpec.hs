@@ -1,21 +1,27 @@
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module WaiSampleSpec
   ( spec
   ) where
 
+import           Control.Monad.IO.Class    (liftIO)
 import           Control.Monad.Reader      (ReaderT, mapReaderT)
 import           Control.Monad.State.Lazy  (evalStateT)
 import           Data.ByteString.Char8     ()
 import qualified Data.ByteString.Lazy      as BSL
-import           Network.HTTP.Types        (Header, methodGet, methodPost)
+import           GHC.Stack                 (HasCallStack)
+import           Network.HTTP.Types        (Header, ResponseHeaders, methodGet,
+                                            methodPost)
 import qualified Network.Wai               as Wai
 import qualified Network.Wai.Internal      as WaiI
-import           Network.Wai.Test          (Session, assertBody, assertHeader,
+import           Network.Wai.Test          (SResponse (SResponse, simpleHeaders),
+                                            Session, assertBody, assertHeader,
                                             assertStatus, defaultRequest,
                                             request, setPath)
 import           Network.Wai.Test.Internal (initState)
-import           Test.Syd                  (Spec, around, describe, it)
+import           Test.Syd                  (Spec, around, describe, it,
+                                            shouldMatchList)
 import           WaiSample.Server          (sampleApp)
 
 
@@ -130,6 +136,27 @@ spec =
       assertBody expectedBody res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
+    it "GET /customerHeadered returns a customer's information with reponse headers" . runStateTClientState $ do
+      let cId = "999"
+          req = defaultRequest
+                  `setPath` "/customerHeadered"
+                  `addHeader` ("Accept", "text/html,*/*")
+      res <- request req
+      assertStatus 200 res
+      let expectedBody =
+            "{\"customerName\":\"Mr. " <> cId <> "\","
+              <> "\"customerId\":"
+              <> cId
+              <> "}"
+          expectedHeaders =
+            [ ("Content-Type", "application/json")
+            , ("X-RateLimit-Limit", "50")
+            , ("X-RateLimit-Reset", "2022-12-07 17:59")
+            ]
+
+      assertBody expectedBody res
+      assertHeaders expectedHeaders res
+
     it "POST /products is available" . runStateTClientState $ do
       let req = defaultRequest
                   { WaiI.requestMethod = methodPost }
@@ -147,6 +174,11 @@ spec =
       assertStatus 405 res
       assertBody "405 Method not allowed." res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
+
+
+assertHeaders :: HasCallStack => ResponseHeaders -> SResponse -> Session ()
+assertHeaders expectedHeaders SResponse { simpleHeaders } =
+  liftIO $ shouldMatchList expectedHeaders simpleHeaders
 
 
 addHeader :: Wai.Request -> Header -> Wai.Request
