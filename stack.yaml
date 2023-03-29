@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-19.30
+resolver: lts-20.16
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -40,12 +40,6 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 extra-deps:
-- sydtest-0.11.0.0@sha256:3fddc8d209b1daaeb535dfd3619938d55099f9689d3547fef5fdf848c854a1f2,3725
-- autodocodec-0.1.0.2@sha256:88d212c53e442ae10460351c8c6d62c191164edfe97b2581c0f724533ef86cce,1647
-- autodocodec-yaml-0.2.0.0@sha256:838ee0fa125999b440d8c09a30d93d446fd7cf3fe05819535785354b203782ed,1201
-- autodocodec-schema-0.1.0.1@sha256:806279a83ea7f90f418be44c3e7295c32661160f9bad1af4420fcd67929f49c0,1089
-- safe-coloured-text-0.2.0.1@sha256:cb01d89f7c1ec009f8341c5b83c880a3798928beca3254a47d161d6ef0fb0165,1104
-- validity-aeson-0.2.0.5@sha256:e4baa2ad9deaf2c903e1ef8e55e9977410ed867c9e46fa14427e8f6ef8b4dc2e,1402
 - ./http-api-data/
 
 # Override default flag values for local packages and extra-deps

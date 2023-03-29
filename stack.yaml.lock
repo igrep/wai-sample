@@ -3,52 +3,10 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages:
-- completed:
-    hackage: sydtest-0.11.0.0@sha256:3fddc8d209b1daaeb535dfd3619938d55099f9689d3547fef5fdf848c854a1f2,3725
-    pantry-tree:
-      size: 3079
-      sha256: 70ddbe92270a8cc607cab5d8c2d715466bd5872d3dcddc22217daf5de1543d9b
-  original:
-    hackage: sydtest-0.11.0.0@sha256:3fddc8d209b1daaeb535dfd3619938d55099f9689d3547fef5fdf848c854a1f2,3725
-- completed:
-    hackage: autodocodec-0.1.0.2@sha256:88d212c53e442ae10460351c8c6d62c191164edfe97b2581c0f724533ef86cce,1647
-    pantry-tree:
-      size: 760
-      sha256: bf90e3d2c2e9c2b33a645c02962a31cee5bb706fa1904cf53e12311ecbffbb20
-  original:
-    hackage: autodocodec-0.1.0.2@sha256:88d212c53e442ae10460351c8c6d62c191164edfe97b2581c0f724533ef86cce,1647
-- completed:
-    hackage: autodocodec-yaml-0.2.0.0@sha256:838ee0fa125999b440d8c09a30d93d446fd7cf3fe05819535785354b203782ed,1201
-    pantry-tree:
-      size: 439
-      sha256: 3607ae8ff38c58dfad8f0a19b21e1a10053fddfff934bc6b987c006184f5786f
-  original:
-    hackage: autodocodec-yaml-0.2.0.0@sha256:838ee0fa125999b440d8c09a30d93d446fd7cf3fe05819535785354b203782ed,1201
-- completed:
-    hackage: autodocodec-schema-0.1.0.1@sha256:806279a83ea7f90f418be44c3e7295c32661160f9bad1af4420fcd67929f49c0,1089
-    pantry-tree:
-      size: 235
-      sha256: b1f609c52149913a0bd843b2037d486c69c51630d135d4aaf39eff313ff82073
-  original:
-    hackage: autodocodec-schema-0.1.0.1@sha256:806279a83ea7f90f418be44c3e7295c32661160f9bad1af4420fcd67929f49c0,1089
-- completed:
-    hackage: safe-coloured-text-0.2.0.1@sha256:cb01d89f7c1ec009f8341c5b83c880a3798928beca3254a47d161d6ef0fb0165,1104
-    pantry-tree:
-      size: 427
-      sha256: 9c8efa357ed689fe7d73e53e502f114e71ed7c2d561e5e91b443656af9158161
-  original:
-    hackage: safe-coloured-text-0.2.0.1@sha256:cb01d89f7c1ec009f8341c5b83c880a3798928beca3254a47d161d6ef0fb0165,1104
-- completed:
-    hackage: validity-aeson-0.2.0.5@sha256:e4baa2ad9deaf2c903e1ef8e55e9977410ed867c9e46fa14427e8f6ef8b4dc2e,1402
-    pantry-tree:
-      size: 301
-      sha256: bbd77378527e7ce68c5e581213f8a9036efbbb36c4e62f3933e96fe440c2e10e
-  original:
-    hackage: validity-aeson-0.2.0.5@sha256:e4baa2ad9deaf2c903e1ef8e55e9977410ed867c9e46fa14427e8f6ef8b4dc2e,1402
+packages: []
 snapshots:
 - completed:
-    size: 619200
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/30.yaml
-    sha256: 9a74d76d250a455d9cd11e74f157e087787fa9aa3c4264e69c94703d1e71aede
-  original: lts-19.30
+    sha256: dad15e2ec0c09280a5c2e07190fb18710fc54472f029f34f861f686540824d81
+    size: 649592
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/20/16.yaml
+  original: lts-20.16
