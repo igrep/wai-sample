@@ -84,7 +84,7 @@ instance
   ) => DecodeByResponseSpec (WithStatus status resTyp, resObj) where
   decodeByResponseSpec mediaType res = do
     rr <- decodeByResponseSpec @(resTyp, resObj) mediaType res
-    return $ RawResponse (NonDefaultStatus (toUntypedStatusCode @status)) [] (rawBody rr)
+    return $ RawResponse (NonDefaultStatus (toUntypedStatusCode @status)) (rawHeaders rr) (rawBody rr)
 
 instance
   ( Typeable status
