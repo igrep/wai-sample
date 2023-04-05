@@ -110,7 +110,20 @@ sampleRoutes =
         let exampleRateLimitReset = UTCTime (fromGregorian 2023 04 05) 864.5
         return . headered 50 . headered exampleRateLimitReset $ customerOfId 999
         )
+
   -- TODO: WithStatus, ContentTypes, Sumと組み合わせた場合のハンドラー
+  , get @(
+      Sum
+        '[ (PlainText, Headered '[Header "X-RateLimit-Limit" Int, Header "X-RateLimit-Reset" UTCTime] T.Text)
+         , Response (WithStatus Status503 PlainText) (Headered '[Header "X-ErrorId" T.Text] T.Text)
+         ])
+      "customerIdTxtHeadered"
+      -- /customer/:id.txt
+      (path "customer/" *> decimalPiece <* path ".txt")
+      (\i ->
+        if i == 503
+          then return . sumLift $ Response @(WithStatus Status503 PlainText) ("error" :: T.Text)
+          else return . sumLift $ "Customer " <> T.pack (show i))
   ]
  where
   customerOfId i =

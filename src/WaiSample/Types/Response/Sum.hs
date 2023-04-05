@@ -29,9 +29,10 @@ import           WaiSample.Types.Response     (DecodeByResponseSpec,
                                                EncodeByResponseSpec,
                                                RawResponse (RawResponse, rawStatusCode),
                                                ResponseObject, ResponseSpec,
-                                               ResponseType,
+                                               ResponseType, ToRawResponse,
                                                decodeByResponseSpec,
-                                               encodeByResponseSpec)
+                                               encodeByResponseSpec,
+                                               toRawResponse)
 import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
 
@@ -220,6 +221,19 @@ instance
   ) => DecodeByResponseSpec (Sum (resSpec ': resSpecs)) where
   decodeByResponseSpec mt (This resObj)  = decodeByResponseSpec @resSpec mt resObj
   decodeByResponseSpec mt (That resObjs) = decodeByResponseSpec @(Sum resSpecs) mt resObjs
+
+
+instance ToRawResponse (Sum '[]) where
+  toRawResponse _ _ = fail "Impossible: Empty Sum"
+
+instance
+  ( Typeable resObj
+  , HasContentTypes resTyp
+  , ToRawResponse (resTyp, resObj)
+  , ToRawResponse (Sum resSpecs)
+  ) => ToRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
+  toRawResponse mt (This resObj)  = toRawResponse @(resTyp, resObj) mt resObj
+  toRawResponse mt (That resObjs) = toRawResponse @(Sum resSpecs) mt resObjs
 
 
 instance EncodeByResponseSpec (Sum '[]) where
