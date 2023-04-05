@@ -219,10 +219,9 @@ instance
   , DecodeByResponseSpec (resTyp, resObj)
   ) => ToRawResponse (resTyp, Headered headers resObj) where
   toRawResponse mt hdResObj = do
-    let (rawHeaders, resObj) = unwrapHeadered hdResObj
+    let (rhds, resObj) = unwrapHeadered hdResObj
     rr <- decodeByResponseSpec @(resTyp, resObj) mt resObj
-    -- TODO: Fix headers
-    return rr { rawHeaders }
+    return rr { rawHeaders = rawHeaders rr ++ rhds }
 
 instance
   ( Typeable resObj
