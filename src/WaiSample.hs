@@ -42,7 +42,7 @@ import           Data.Functor               (void)
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import qualified Data.Text.IO               as TIO
-import           Data.Time.Clock            (UTCTime)
+import           Data.Time.Clock            (UTCTime (UTCTime))
 import           GHC.Generics               (Generic)
 import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
@@ -51,6 +51,7 @@ import           Web.FormUrlEncoded         (FromForm, ToForm)
 
 import           Data.Typeable              (Typeable)
 
+import           Data.Time                  (fromGregorian)
 import           WaiSample.Routes
 import           WaiSample.Types
 
@@ -106,8 +107,8 @@ sampleRoutes =
       "customerHeadered"
       (path "customerHeadered")
       (\_ -> do
-        let rateLimitReset = undefined -- TODO
-        return . headered 50 . headered rateLimitReset $ customerOfId 999
+        let exampleRateLimitReset = UTCTime (fromGregorian 2023 04 05) 864.5
+        return . headered 50 . headered exampleRateLimitReset $ customerOfId 999
         )
   -- TODO: WithStatus, ContentTypes, Sumと組み合わせた場合のハンドラー
   ]

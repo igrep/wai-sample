@@ -151,7 +151,7 @@ spec =
           expectedHeaders =
             [ ("Content-Type", "application/json")
             , ("X-RateLimit-Limit", "50")
-            , ("X-RateLimit-Reset", "2022-12-07 17:59")
+            , ("X-RateLimit-Reset", "2023-04-05T00:14:24.5Z")
             ]
 
       assertBody expectedBody res
