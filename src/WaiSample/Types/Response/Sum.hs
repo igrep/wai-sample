@@ -27,12 +27,14 @@ import           Language.Haskell.TH.Syntax   (Code (Code), Lift, lift,
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
 import           WaiSample.Types.Response     (DecodeByResponseSpec,
                                                EncodeByResponseSpec,
+                                               FromRawResponse,
                                                RawResponse (RawResponse, rawStatusCode),
+                                               Response (Response, responseObject),
                                                ResponseObject, ResponseSpec,
                                                ResponseType, ToRawResponse,
                                                decodeByResponseSpec,
                                                encodeByResponseSpec,
-                                               toRawResponse)
+                                               fromRawResponse, toRawResponse)
 import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
 
@@ -235,6 +237,15 @@ instance
   toRawResponse mt (This resObj)  = toRawResponse @(resTyp, resObj) mt resObj
   toRawResponse mt (That resObjs) = toRawResponse @(Sum resSpecs) mt resObjs
 
+instance
+  ( Typeable resObj
+  , HasContentTypes resTyp
+  , ToRawResponse (resTyp, resObj)
+  , ToRawResponse (Sum resSpecs)
+  ) => ToRawResponse (Sum (Response resTyp resObj ': resSpecs)) where
+  toRawResponse mt (This resObj)  = toRawResponse @(resTyp, resObj) mt $ responseObject resObj
+  toRawResponse mt (That resObjs) = toRawResponse @(Sum resSpecs) mt resObjs
+
 
 instance EncodeByResponseSpec (Sum '[]) where
   encodeByResponseSpec _ _ = fail "Impossible: Empty Sum"
@@ -253,6 +264,33 @@ instance
         && mt `elem` contentTypes @(ResponseType resSpec)
       then This <$> encodeByResponseSpec @resSpec mt rr
       else That <$> encodeByResponseSpec @(Sum resSpecs) mt rr
+
+instance FromRawResponse (Sum '[]) where
+  fromRawResponse _ _ = fail "Impossible: Empty Sum"
+
+instance
+  ( Typeable resObj
+  , HasContentTypes resTyp
+  , FromRawResponse (resTyp, resObj)
+  , FromRawResponse (Sum resSpecs)
+  ) => FromRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
+  fromRawResponse mt rr@RawResponse { rawStatusCode } =
+    if rawStatusCode `elem` statusCodes @resTyp
+        && mt `elem` contentTypes @resTyp
+      then This <$> fromRawResponse @(resTyp, resObj) mt rr
+      else That <$> fromRawResponse @(Sum resSpecs) mt rr
+
+instance
+  ( Typeable resObj
+  , HasContentTypes resTyp
+  , FromRawResponse (resTyp, resObj)
+  , FromRawResponse (Sum resSpecs)
+  ) => FromRawResponse (Sum (Response resTyp resObj ': resSpecs)) where
+  fromRawResponse mt rr = do
+    resObj <- fromRawResponse @(Sum ((resTyp, resObj) ': resSpecs)) mt rr
+    case resObj of
+      This thisObj -> return . This $ Response @resTyp thisObj
+      That _that   -> That <$> fromRawResponse @(Sum resSpecs) mt rr
 
 
 instance HasStatusCode (Sum '[]) where
