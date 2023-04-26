@@ -212,7 +212,7 @@ instance ResponseSpecAll resSpecs => ResponseSpec (Sum resSpecs) where
 
 
 instance DecodeByResponseSpec (Sum '[]) where
-  decodeByResponseSpec _ _ = fail "Impossible: Empty Sum"
+  decodeByResponseSpec _ _ = fail "DecodeByResponseSpec: Impossible: Empty Sum"
 
 instance
   ( ResponseSpec resSpec
@@ -226,7 +226,7 @@ instance
 
 
 instance ToRawResponse (Sum '[]) where
-  toRawResponse _ _ = fail "Impossible: Empty Sum"
+  toRawResponse _ _ = fail "ToRawResponse: Impossible: Empty Sum"
 
 instance
   ( Typeable resObj
@@ -248,7 +248,7 @@ instance
 
 
 instance EncodeByResponseSpec (Sum '[]) where
-  encodeByResponseSpec _ _ = fail "Impossible: Empty Sum"
+  encodeByResponseSpec _ _ = fail "EncodeByResponseSpec: Impossible: Empty Sum"
 
 instance
   ( ResponseSpec resSpec
@@ -266,7 +266,7 @@ instance
       else That <$> encodeByResponseSpec @(Sum resSpecs) mt rr
 
 instance FromRawResponse (Sum '[]) where
-  fromRawResponse _ _ = fail "Impossible: Empty Sum"
+  fromRawResponse _ _ = fail "FromRawResponse: Impossible: Empty Sum"
 
 instance
   ( Typeable resObj
