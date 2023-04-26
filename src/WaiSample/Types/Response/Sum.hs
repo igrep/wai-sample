@@ -271,6 +271,7 @@ instance FromRawResponse (Sum '[]) where
 instance
   ( Typeable resObj
   , HasContentTypes resTyp
+  , HasStatusCode resTyp
   , FromRawResponse (resTyp, resObj)
   , FromRawResponse (Sum resSpecs)
   ) => FromRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
@@ -283,6 +284,7 @@ instance
 instance
   ( Typeable resObj
   , HasContentTypes resTyp
+  , HasStatusCode resTyp
   , FromRawResponse (resTyp, resObj)
   , FromRawResponse (Sum resSpecs)
   ) => FromRawResponse (Sum (Response resTyp resObj ': resSpecs)) where
