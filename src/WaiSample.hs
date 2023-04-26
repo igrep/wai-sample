@@ -120,10 +120,22 @@ sampleRoutes =
       "customerIdTxtHeadered"
       -- /customer/:id.txt
       (path "customer/" *> decimalPiece <* path ".txt")
-      (\i ->
+      (\i -> do
+        let time = UTCTime (fromGregorian 2023 4 5) 864.5
         if i == 503
-          then return . sumLift $ Response @(WithStatus Status503 PlainText) ("error" :: T.Text)
-          else return . sumLift $ "Customer " <> T.pack (show i))
+          then
+            return
+              . sumLift
+              $ Response
+                @(WithStatus Status503 PlainText)
+                (headered @"X-ErrorId" ("SERVER ERROR" :: T.Text) ("error" :: T.Text))
+          else
+            return
+              . sumLift
+              . headered @"X-RateLimit-Limit" (90 :: Int)
+              . headered @"X-RateLimit-Reset" time
+              $ "Customer " <> T.pack (show i)
+              )
   ]
  where
   customerOfId i =
