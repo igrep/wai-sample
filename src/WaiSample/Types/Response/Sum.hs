@@ -25,14 +25,14 @@ import           Language.Haskell.TH          (Exp, Quote)
 import           Language.Haskell.TH.Syntax   (Code (Code), Lift, lift,
                                                liftTyped, unsafeTExpCoerce)
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
-import           WaiSample.Types.Response     (DecodeByResponseSpec,
+import           WaiSample.Types.Response     (DecodeByMimeType,
                                                EncodeByResponseSpec,
                                                FromRawResponse,
                                                RawResponse (RawResponse, rawStatusCode),
                                                Response (Response, responseObject),
                                                ResponseObject, ResponseSpec,
                                                ResponseType, ToRawResponse,
-                                               decodeByResponseSpec,
+                                               decodeByMimeType,
                                                encodeByResponseSpec,
                                                fromRawResponse, toRawResponse)
 import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
@@ -211,18 +211,18 @@ instance ResponseSpecAll resSpecs => ResponseSpec (Sum resSpecs) where
   type ResponseObject (Sum resSpecs) = Sum (AllResponseObjects resSpecs)
 
 
-instance DecodeByResponseSpec (Sum '[]) where
-  decodeByResponseSpec _ _ = fail "DecodeByResponseSpec: Impossible: Empty Sum"
+instance DecodeByMimeType (Sum '[]) where
+  decodeByMimeType _ _ = fail "DecodeByMimeType: Impossible: Empty Sum"
 
 instance
   ( ResponseSpec resSpec
   , Typeable (ResponseObject resSpec)
-  , DecodeByResponseSpec resSpec
-  , DecodeByResponseSpec (Sum resSpecs)
+  , DecodeByMimeType resSpec
+  , DecodeByMimeType (Sum resSpecs)
   , ResponseSpecAll resSpecs
-  ) => DecodeByResponseSpec (Sum (resSpec ': resSpecs)) where
-  decodeByResponseSpec mt (This resObj)  = decodeByResponseSpec @resSpec mt resObj
-  decodeByResponseSpec mt (That resObjs) = decodeByResponseSpec @(Sum resSpecs) mt resObjs
+  ) => DecodeByMimeType (Sum (resSpec ': resSpecs)) where
+  decodeByMimeType mt (This resObj)  = decodeByMimeType @resSpec mt resObj
+  decodeByMimeType mt (That resObjs) = decodeByMimeType @(Sum resSpecs) mt resObjs
 
 
 instance ToRawResponse (Sum '[]) where

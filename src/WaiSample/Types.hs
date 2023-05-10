@@ -80,10 +80,10 @@ instance
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
-  , DecodeByResponseSpec (resTyp, resObj)
-  ) => DecodeByResponseSpec (WithStatus status resTyp, resObj) where
-  decodeByResponseSpec mediaType res = do
-    rr <- decodeByResponseSpec @(resTyp, resObj) mediaType res
+  , DecodeByMimeType (resTyp, resObj)
+  ) => DecodeByMimeType (WithStatus status resTyp, resObj) where
+  decodeByMimeType mediaType res = do
+    rr <- decodeByMimeType @(resTyp, resObj) mediaType res
     return $ RawResponse (NonDefaultStatus (toUntypedStatusCode @status)) (rawHeaders rr) (rawBody rr)
 
 instance
@@ -92,10 +92,10 @@ instance
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
-  , DecodeByResponseSpec (resTyp, resObj)
-  ) => DecodeByResponseSpec (Response (WithStatus status resTyp) resObj) where
-  decodeByResponseSpec mediaType (Response resObj) =
-    decodeByResponseSpec @(WithStatus status resTyp, resObj) mediaType resObj
+  , DecodeByMimeType (resTyp, resObj)
+  ) => DecodeByMimeType (Response (WithStatus status resTyp) resObj) where
+  decodeByMimeType mediaType (Response resObj) =
+    decodeByMimeType @(WithStatus status resTyp, resObj) mediaType resObj
 
 
 instance
