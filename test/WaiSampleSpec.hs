@@ -136,6 +136,28 @@ spec =
       assertBody expectedBody res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
+    it "GET /customer/:customerId.txt returns a JSON string with Customer ID" . runStateTClientState $ do
+      let cId = "1752"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".txt")
+                  `addHeader` ("Accept", "application/json,*/*")
+      res <- request req
+      assertStatus 200 res
+      let expectedBody = "Customer " <> cId
+      assertBody expectedBody res
+      assertHeader "Content-Type" "application/json" res
+
+    it "GET /customer/503.txt returns an error message as a JSON string" . runStateTClientState $ do
+      let cId = "503"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".txt")
+                  `addHeader` ("Accept", "application/json,*/*")
+      res <- request req
+      assertStatus 503 res
+      let expectedBody = "error"
+      assertBody expectedBody res
+      assertHeader "Content-Type" "application/json" res
+
     it "GET /customerHeadered returns a customer's information with reponse headers" . runStateTClientState $ do
       let cId = "999"
           req = defaultRequest
