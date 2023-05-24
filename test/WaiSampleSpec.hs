@@ -136,6 +136,7 @@ spec =
       assertBody expectedBody res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
+    -- TODO: application/json だけでなく、text/plain のケースもテスト
     it "GET /customer/:customerId.txt returns a JSON string with Customer ID" . runStateTClientState $ do
       let cId = "1752"
           req = defaultRequest
