@@ -111,7 +111,6 @@ sampleRoutes =
         return . headered 50 . headered exampleRateLimitReset $ customerOfId 999
         )
 
-  -- TODO: WithStatus, ContentTypes, Sumと組み合わせた場合のハンドラー
   , get @(
       Sum
         '[ (ContentTypes '[PlainText, Json], Headered '[Header "X-RateLimit-Limit" Int, Header "X-RateLimit-Reset" UTCTime] T.Text)
