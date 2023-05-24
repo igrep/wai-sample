@@ -19,21 +19,20 @@ module WaiSample.Types.Response.Sum where
 
 import           Data.Kind                    (Constraint, Type)
 import           Data.Type.Bool               (If)
-import           Data.Typeable                (Typeable)
 import           GHC.TypeLits                 (ErrorMessage (..), TypeError)
 import           Language.Haskell.TH          (Exp, Quote)
 import           Language.Haskell.TH.Syntax   (Code (Code), Lift, lift,
                                                liftTyped, unsafeTExpCoerce)
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
 import           WaiSample.Types.Response     (DecodeByMimeType,
-                                               EncodeByResponseSpec,
+                                               EncodeByMimeType,
                                                FromRawResponse,
                                                RawResponse (RawResponse, rawStatusCode),
                                                Response (Response, responseObject),
                                                ResponseObject, ResponseSpec,
                                                ResponseType, ToRawResponse,
                                                decodeByMimeType,
-                                               encodeByResponseSpec,
+                                               encodeByMimeType,
                                                fromRawResponse, toRawResponse)
 import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
@@ -215,9 +214,7 @@ instance DecodeByMimeType (Sum '[]) where
   decodeByMimeType _ _ = fail "DecodeByMimeType: Impossible: Empty Sum"
 
 instance
-  ( ResponseSpec resSpec
-  , Typeable (ResponseObject resSpec)
-  , DecodeByMimeType resSpec
+  ( DecodeByMimeType resSpec
   , DecodeByMimeType (Sum resSpecs)
   , ResponseSpecAll resSpecs
   ) => DecodeByMimeType (Sum (resSpec ': resSpecs)) where
@@ -229,8 +226,7 @@ instance ToRawResponse (Sum '[]) where
   toRawResponse _ _ = fail "ToRawResponse: Impossible: Empty Sum"
 
 instance
-  ( Typeable resObj
-  , HasContentTypes resTyp
+  ( HasContentTypes resTyp
   , ToRawResponse (resTyp, resObj)
   , ToRawResponse (Sum resSpecs)
   ) => ToRawResponse (Sum ((resTyp, resObj) ': resSpecs)) where
@@ -238,8 +234,7 @@ instance
   toRawResponse mt (That resObjs) = toRawResponse @(Sum resSpecs) mt resObjs
 
 instance
-  ( Typeable resObj
-  , HasContentTypes resTyp
+  ( HasContentTypes resTyp
   , ToRawResponse (resTyp, resObj)
   , ToRawResponse (Sum resSpecs)
   ) => ToRawResponse (Sum (Response resTyp resObj ': resSpecs)) where
@@ -247,30 +242,27 @@ instance
   toRawResponse mt (That resObjs) = toRawResponse @(Sum resSpecs) mt resObjs
 
 
-instance EncodeByResponseSpec (Sum '[]) where
-  encodeByResponseSpec _ _ = fail "EncodeByResponseSpec: Impossible: Empty Sum"
+instance EncodeByMimeType (Sum '[]) where
+  encodeByMimeType _ _ = fail "EncodeByMimeType: Impossible: Empty Sum"
 
 instance
-  ( ResponseSpec resSpec
-  , Typeable (ResponseObject resSpec)
-  , HasStatusCode (ResponseType resSpec)
+  ( HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
-  , EncodeByResponseSpec resSpec
-  , EncodeByResponseSpec (Sum resSpecs)
+  , EncodeByMimeType resSpec
+  , EncodeByMimeType (Sum resSpecs)
   , ResponseSpecAll resSpecs
-  ) => EncodeByResponseSpec (Sum (resSpec ': resSpecs)) where
-  encodeByResponseSpec mt rr@RawResponse { rawStatusCode } =
+  ) => EncodeByMimeType (Sum (resSpec ': resSpecs)) where
+  encodeByMimeType mt rr@RawResponse { rawStatusCode } =
     if rawStatusCode `elem` statusCodes @(ResponseType resSpec)
         && mt `elem` contentTypes @(ResponseType resSpec)
-      then This <$> encodeByResponseSpec @resSpec mt rr
-      else That <$> encodeByResponseSpec @(Sum resSpecs) mt rr
+      then This <$> encodeByMimeType @resSpec mt rr
+      else That <$> encodeByMimeType @(Sum resSpecs) mt rr
 
 instance FromRawResponse (Sum '[]) where
   fromRawResponse _ _ = fail "FromRawResponse: Impossible: Empty Sum"
 
 instance
-  ( Typeable resObj
-  , HasContentTypes resTyp
+  ( HasContentTypes resTyp
   , HasStatusCode resTyp
   , FromRawResponse (resTyp, resObj)
   , FromRawResponse (Sum resSpecs)
@@ -282,8 +274,7 @@ instance
       else That <$> fromRawResponse @(Sum resSpecs) mt rr
 
 instance
-  ( Typeable resObj
-  , HasContentTypes resTyp
+  ( HasContentTypes resTyp
   , HasStatusCode resTyp
   , FromRawResponse (resTyp, resObj)
   , FromRawResponse (Sum resSpecs)
@@ -309,8 +300,7 @@ instance HasContentTypes (Sum '[]) where
   contentTypes = []
 
 instance
-  ( LiftSum resTyps
-  , HasContentTypes resTyp
+  ( HasContentTypes resTyp
   , HasContentTypes (Sum resTyps)
   ) => HasContentTypes (Sum (resTyp ': resTyps)) where
   contentTypes = contentTypes @resTyp ++ contentTypes @(Sum resTyps)

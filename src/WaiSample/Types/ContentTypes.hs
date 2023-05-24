@@ -19,7 +19,7 @@ import           Network.HTTP.Media         (MediaType, (//), (/:))
 import           Data.Kind                  (Type)
 
 
-class Lift contTyp => HasContentTypes contTyp where
+class HasContentTypes contTyp where
   contentTypes :: [MediaType]
 
   matchContentType :: MediaType -> Bool

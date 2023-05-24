@@ -70,13 +70,12 @@ data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lif
 instance IsStatusCode status => HasStatusCode (WithStatus status resTyp) where
   statusCodes = [NonDefaultStatus $ toUntypedStatusCode @status]
 
-instance (Lift status, HasContentTypes resTyp) => HasContentTypes (WithStatus status resTyp) where
+instance HasContentTypes resTyp => HasContentTypes (WithStatus status resTyp) where
   contentTypes = contentTypes @resTyp
 
 
 instance
   ( Typeable status
-  , Lift status
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
@@ -88,7 +87,6 @@ instance
 
 instance
   ( Typeable status
-  , Lift status
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
@@ -100,14 +98,13 @@ instance
 
 instance
   ( Typeable status
-  , Lift status
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
-  , EncodeByResponseSpec (resTyp, resObj)
-  ) => EncodeByResponseSpec (WithStatus status resTyp, resObj) where
-  encodeByResponseSpec mediaType rr = do
-    resObj <- encodeByResponseSpec @(resTyp, resObj) mediaType rr
+  , EncodeByMimeType (resTyp, resObj)
+  ) => EncodeByMimeType (WithStatus status resTyp, resObj) where
+  encodeByMimeType mediaType rr = do
+    resObj <- encodeByMimeType @(resTyp, resObj) mediaType rr
     rawSt <-
       case rawStatusCode rr of
           DefaultStatus       -> fail "Unexpected status code"
@@ -117,11 +114,10 @@ instance
 
 instance
   ( Typeable status
-  , Lift status
   , IsStatusCode status
   , HasContentTypes resTyp
   , Typeable resObj
-  , EncodeByResponseSpec (resTyp, resObj)
-  ) => EncodeByResponseSpec (Response (WithStatus status resTyp) resObj) where
-  encodeByResponseSpec mediaType rr =
-    Response <$> encodeByResponseSpec @(WithStatus status resTyp, resObj) mediaType rr
+  , EncodeByMimeType (resTyp, resObj)
+  ) => EncodeByMimeType (Response (WithStatus status resTyp) resObj) where
+  encodeByMimeType mediaType rr =
+    Response <$> encodeByMimeType @(WithStatus status resTyp, resObj) mediaType rr
