@@ -24,15 +24,11 @@ import           Language.Haskell.TH          (Exp, Quote)
 import           Language.Haskell.TH.Syntax   (Code (Code), Lift, lift,
                                                liftTyped, unsafeTExpCoerce)
 import           WaiSample.Types.ContentTypes (HasContentTypes (contentTypes))
-import           WaiSample.Types.Response     (DecodeByMimeType,
-                                               EncodeByMimeType,
-                                               FromRawResponse,
+import           WaiSample.Types.Response     (FromRawResponse,
                                                RawResponse (RawResponse, rawStatusCode),
                                                Response (Response, responseObject),
                                                ResponseObject, ResponseSpec,
                                                ResponseType, ToRawResponse,
-                                               decodeByMimeType,
-                                               encodeByMimeType,
                                                fromRawResponse, toRawResponse)
 import           WaiSample.Types.Status       (HasStatusCode (statusCodes))
 
@@ -210,18 +206,6 @@ instance ResponseSpecAll resSpecs => ResponseSpec (Sum resSpecs) where
   type ResponseObject (Sum resSpecs) = Sum (AllResponseObjects resSpecs)
 
 
-instance DecodeByMimeType (Sum '[]) where
-  decodeByMimeType _ _ = fail "DecodeByMimeType: Impossible: Empty Sum"
-
-instance
-  ( DecodeByMimeType resSpec
-  , DecodeByMimeType (Sum resSpecs)
-  , ResponseSpecAll resSpecs
-  ) => DecodeByMimeType (Sum (resSpec ': resSpecs)) where
-  decodeByMimeType mt (This resObj)  = decodeByMimeType @resSpec mt resObj
-  decodeByMimeType mt (That resObjs) = decodeByMimeType @(Sum resSpecs) mt resObjs
-
-
 instance ToRawResponse (Sum '[]) where
   toRawResponse _ _ = fail "ToRawResponse: Impossible: Empty Sum"
 
@@ -241,22 +225,6 @@ instance
   toRawResponse mt (This resObj)  = toRawResponse @(resTyp, resObj) mt $ responseObject resObj
   toRawResponse mt (That resObjs) = toRawResponse @(Sum resSpecs) mt resObjs
 
-
-instance EncodeByMimeType (Sum '[]) where
-  encodeByMimeType _ _ = fail "EncodeByMimeType: Impossible: Empty Sum"
-
-instance
-  ( HasStatusCode (ResponseType resSpec)
-  , HasContentTypes (ResponseType resSpec)
-  , EncodeByMimeType resSpec
-  , EncodeByMimeType (Sum resSpecs)
-  , ResponseSpecAll resSpecs
-  ) => EncodeByMimeType (Sum (resSpec ': resSpecs)) where
-  encodeByMimeType mt rr@RawResponse { rawStatusCode } =
-    if rawStatusCode `elem` statusCodes @(ResponseType resSpec)
-        && mt `elem` contentTypes @(ResponseType resSpec)
-      then This <$> encodeByMimeType @resSpec mt rr
-      else That <$> encodeByMimeType @(Sum resSpecs) mt rr
 
 instance FromRawResponse (Sum '[]) where
   fromRawResponse _ _ = fail "FromRawResponse: Impossible: Empty Sum"

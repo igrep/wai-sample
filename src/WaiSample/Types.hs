@@ -75,10 +75,8 @@ instance HasContentTypes resTyp => HasContentTypes (WithStatus status resTyp) wh
 
 
 instance
-  ( Typeable status
-  , IsStatusCode status
+  ( IsStatusCode status
   , HasContentTypes resTyp
-  , Typeable resObj
   , DecodeByMimeType (resTyp, resObj)
   ) => DecodeByMimeType (WithStatus status resTyp, resObj) where
   decodeByMimeType mediaType res = do
@@ -86,10 +84,8 @@ instance
     return $ RawResponse (NonDefaultStatus (toUntypedStatusCode @status)) (rawHeaders rr) (rawBody rr)
 
 instance
-  ( Typeable status
-  , IsStatusCode status
+  ( IsStatusCode status
   , HasContentTypes resTyp
-  , Typeable resObj
   , DecodeByMimeType (resTyp, resObj)
   ) => DecodeByMimeType (Response (WithStatus status resTyp) resObj) where
   decodeByMimeType mediaType (Response resObj) =
@@ -97,10 +93,8 @@ instance
 
 
 instance
-  ( Typeable status
-  , IsStatusCode status
+  ( IsStatusCode status
   , HasContentTypes resTyp
-  , Typeable resObj
   , EncodeByMimeType (resTyp, resObj)
   ) => EncodeByMimeType (WithStatus status resTyp, resObj) where
   encodeByMimeType mediaType rr = do
@@ -113,10 +107,8 @@ instance
     return resObj
 
 instance
-  ( Typeable status
-  , IsStatusCode status
+  ( IsStatusCode status
   , HasContentTypes resTyp
-  , Typeable resObj
   , EncodeByMimeType (resTyp, resObj)
   ) => EncodeByMimeType (Response (WithStatus status resTyp) resObj) where
   encodeByMimeType mediaType rr =
