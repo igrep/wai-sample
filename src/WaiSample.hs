@@ -113,8 +113,13 @@ sampleRoutes =
 
   , get @(
       Sum
-        '[ (ContentTypes '[PlainText, Json], Headered '[Header "X-RateLimit-Limit" Int, Header "X-RateLimit-Reset" UTCTime] T.Text)
-         , Response (WithStatus Status503 (ContentTypes '[Json, PlainText])) (Headered '[Header "X-ErrorId" T.Text] T.Text)
+        '[
+          ( ContentTypes '[PlainText, Json]
+          , Headered '[Header "X-RateLimit-Limit" Int, Header "X-RateLimit-Reset" UTCTime] T.Text
+          )
+         , Response
+            (WithStatus Status503 (ContentTypes '[Json, PlainText]))
+            (Headered '[Header "X-ErrorId" T.Text] T.Text)
          ])
       "customerIdTxtHeadered"
       -- /customer/:id.txt
