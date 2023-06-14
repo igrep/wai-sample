@@ -123,7 +123,7 @@ sampleRoutes =
          ])
       "customerIdTxtHeadered"
       -- /customer/:id.txt
-      (path "customer/" *> decimalPiece <* path ".txt")
+      (path "customer/" *> decimalPiece <* path ".txt-or-json")
       (\i -> do
         let time = UTCTime (fromGregorian 2023 4 5) 864.5
         if i == 503

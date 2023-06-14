@@ -8,8 +8,11 @@ module WaiSampleSpec
 import           Control.Monad.IO.Class    (liftIO)
 import           Control.Monad.Reader      (ReaderT, mapReaderT)
 import           Control.Monad.State.Lazy  (evalStateT)
+import qualified Data.Aeson                as A
 import           Data.ByteString.Char8     ()
 import qualified Data.ByteString.Lazy      as BSL
+import qualified Data.Text                 as T
+import qualified Data.Text.Encoding        as TE
 import           GHC.Stack                 (HasCallStack)
 import           Network.HTTP.Types        (Header, ResponseHeaders, methodGet,
                                             methodPost)
@@ -137,25 +140,25 @@ spec =
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
     -- TODO: application/json だけでなく、text/plain のケースもテスト
-    it "GET /customer/:customerId.txt returns a JSON string with Customer ID" . runStateTClientState $ do
+    it "GET /customer/:customerId.txt-or-json returns a JSON string with Customer ID" . runStateTClientState $ do
       let cId = "1752"
           req = defaultRequest
-                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".txt")
-                  `addHeader` ("Accept", "application/json,*/*")
+                  `setPath` ("/customer/" <> TE.encodeUtf8 cId <> ".txt-or-json")
+                  `addHeader` ("Accept", "application/json")
       res <- request req
       assertStatus 200 res
-      let expectedBody = "Customer " <> cId
+      let expectedBody = A.encode $ "Customer " <> cId
       assertBody expectedBody res
       assertHeader "Content-Type" "application/json" res
 
-    it "GET /customer/503.txt returns an error message as a JSON string" . runStateTClientState $ do
+    it "GET /customer/503.txt-or-json returns an error message as a JSON string" . runStateTClientState $ do
       let cId = "503"
           req = defaultRequest
-                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".txt")
-                  `addHeader` ("Accept", "application/json,*/*")
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".txt-or-json")
+                  `addHeader` ("Accept", "application/json")
       res <- request req
       assertStatus 503 res
-      let expectedBody = "error"
+      let expectedBody = A.encode ("error" :: T.Text)
       assertBody expectedBody res
       assertHeader "Content-Type" "application/json" res
 

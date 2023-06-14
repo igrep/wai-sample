@@ -17,6 +17,7 @@ extra-source-files:
 common common
   build-depends:
       base >=4.7 && <5
+    , aeson >= 2.0
     , bytestring
     , http-types
     , http-client
@@ -50,7 +51,6 @@ library
   hs-source-dirs:
       src
   build-depends:
-      aeson >= 2.0
     , attoparsec
     , case-insensitive
     , errors
