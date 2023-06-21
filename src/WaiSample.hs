@@ -42,6 +42,7 @@ import           Data.Functor               (void)
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import qualified Data.Text.IO               as TIO
+import           Data.Time                  (fromGregorian)
 import           Data.Time.Clock            (UTCTime (UTCTime))
 import           GHC.Generics               (Generic)
 import           Language.Haskell.TH.Syntax (Lift)
@@ -51,7 +52,6 @@ import           Web.FormUrlEncoded         (FromForm, ToForm)
 
 import           Data.Typeable              (Typeable)
 
-import           Data.Time                  (fromGregorian)
 import           WaiSample.Routes
 import           WaiSample.Types
 
@@ -107,7 +107,7 @@ sampleRoutes =
       "customerHeadered"
       (path "customerHeadered")
       (\_ -> do
-        let exampleRateLimitReset = UTCTime (fromGregorian 2023 04 05) 864.5
+        let exampleRateLimitReset = UTCTime (fromGregorian 2023 4 5) 864.5
         return . headered 50 . headered exampleRateLimitReset $ customerOfId 999
         )
 
@@ -122,7 +122,7 @@ sampleRoutes =
             (Headered '[Header "X-ErrorId" T.Text] T.Text)
          ])
       "customerIdTxtHeadered"
-      -- /customer/:id.txt
+      -- /customer/:id.txt-or-json
       (path "customer/" *> decimalPiece <* path ".txt-or-json")
       (\i -> do
         let time = UTCTime (fromGregorian 2023 4 5) 864.5
