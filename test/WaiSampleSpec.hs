@@ -139,7 +139,6 @@ spec =
       assertBody expectedBody res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
-    -- TODO: application/json だけでなく、text/plain のケースもテスト
     it "GET /customer/:customerId.txt-or-json returns a JSON string with Customer ID" . runStateTClientState $ do
       let cId = "1752"
           req = defaultRequest
@@ -148,8 +147,14 @@ spec =
       res <- request req
       assertStatus 200 res
       let expectedBody = A.encode $ "Customer " <> cId
+          expectedHeaders =
+            [ ("Content-Type", "application/json")
+            , ("X-RateLimit-Limit", "90")
+            , ("X-RateLimit-Reset", "2023-06-21T00:14:24.5Z")
+            ]
+
       assertBody expectedBody res
-      assertHeader "Content-Type" "application/json" res
+      assertHeaders expectedHeaders res
 
     it "GET /customer/503.txt-or-json returns an error message as a JSON string" . runStateTClientState $ do
       let cId = "503"
@@ -159,8 +164,46 @@ spec =
       res <- request req
       assertStatus 503 res
       let expectedBody = A.encode ("error" :: T.Text)
+          expectedHeaders =
+            [ ("Content-Type", "application/json")
+            , ("X-ErrorId", "SERVER ERROR")
+            ]
+
       assertBody expectedBody res
-      assertHeader "Content-Type" "application/json" res
+      assertHeaders expectedHeaders res
+
+    it "GET /customer/:customerId.txt-or-json returns a plain text with Customer ID" . runStateTClientState $ do
+      let cId = "1752"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".txt-or-json")
+                  `addHeader` ("Accept", "text/plain")
+      res <- request req
+      assertStatus 200 res
+      let expectedBody = "Customer " <> cId
+          expectedHeaders =
+            [ ("Content-Type", "text/plain;charset=UTF-8")
+            , ("X-RateLimit-Limit", "90")
+            , ("X-RateLimit-Reset", "2023-06-21T00:14:24.5Z")
+            ]
+
+      assertBody expectedBody res
+      assertHeaders expectedHeaders res
+
+    it "GET /customer/503.txt-or-json returns an error message as a plain text" . runStateTClientState $ do
+      let cId = "503"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".txt-or-json")
+                  `addHeader` ("Accept", "text/plain")
+      res <- request req
+      assertStatus 503 res
+      let expectedBody = "error"
+          expectedHeaders =
+            [ ("Content-Type", "text/plain;charset=UTF-8")
+            , ("X-ErrorId", "SERVER ERROR")
+            ]
+
+      assertBody expectedBody res
+      assertHeaders expectedHeaders res
 
     it "GET /customerHeadered returns a customer's information with reponse headers" . runStateTClientState $ do
       let cId = "999"

@@ -7,6 +7,8 @@ module WaiSample.ClientSpec
 
 
 import qualified Data.Text                as T
+import           Data.Time                (fromGregorian)
+import           Data.Time.Clock          (UTCTime (UTCTime))
 import           Network.HTTP.Client      (Manager, defaultManagerSettings,
                                            newManager)
 import           Network.Wai.Handler.Warp (Port, testWithApplication)
@@ -17,7 +19,7 @@ import           Test.Syd                 (Spec, aroundAll, describe,
 import           WaiSample                (Customer (..), PlainText,
                                            Response (Response),
                                            SampleError (SampleError), Status503,
-                                           WithStatus, sumLift)
+                                           WithStatus, headered, sumLift)
 import           WaiSample.Client         (httpClientBackend)
 import           WaiSample.Client.Sample
 import           WaiSample.Server         (sampleApp)
@@ -96,6 +98,16 @@ spec =
       itWithOuter "createProduct returns \"Product created\"" $ \(manager, port) -> do
         let backend = buildBackend port manager
         sampleCreateProduct backend `shouldReturn` "Product created"
+
+      itWithOuter "customerHeadered reaturns a customer with \"X-RateLimit-Limit\" response header" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            exampleRateLimitReset = UTCTime (fromGregorian 2023 4 5) 864.5
+            cId = 999
+            expected = headered 50 . headered exampleRateLimitReset $ Customer
+                { customerName = "Mr. " <> T.pack (show cId)
+                , customerId = cId
+                }
+        sampleCustomerHeadered backend `shouldReturn` expected
 
 
 withServer :: (Port -> IO ()) -> IO ()
