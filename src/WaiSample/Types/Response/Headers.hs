@@ -24,9 +24,22 @@ import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData,
 
 newtype Header (name :: Symbol) (hdObj :: Type) = Header hdObj
 
+instance (KnownSymbol name, Show hdObj) => Show (Header name hdObj) where
+  show (Header hdObj) = "(Header @" ++ symbolVal (Proxy @name) ++ " " ++ show hdObj ++ ")"
+
+instance Eq hdObj => Eq (Header name hdObj) where
+  (Header hdObj0) == (Header hdObj1) = hdObj0 == hdObj1
+
+
 data Headered (headers :: [Type]) (resObj :: Type) where
   NoHeaders :: resObj -> Headered '[] resObj
   AddHeader :: header -> Headered headers resObj -> Headered (header ': headers) resObj
+
+instance Show resObj => Show (Headered '[] resObj) where
+  show (NoHeaders resObj) = show resObj
+
+instance (Show (Headered headers resObj), Show header) => Show (Headered (header ': headers) resObj) where
+  show (AddHeader hdObj rest) = "(headered " ++ show hdObj ++ " " ++ show rest ++ ")"
 
 
 -- Ref. https://hackage.haskell.org/package/servant-0.19.1/docs/src/Servant.API.ResponseHeaders.html#AddHeader
