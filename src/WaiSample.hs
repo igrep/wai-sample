@@ -125,7 +125,7 @@ sampleRoutes =
       -- /customer/:id.txt-or-json
       (path "customer/" *> decimalPiece <* path ".txt-or-json")
       (\i -> do
-        let time = UTCTime (fromGregorian 2023 4 5) 864.5
+        let time = UTCTime (fromGregorian 2023 6 21) 864.5
         if i == 503
           then
             return
