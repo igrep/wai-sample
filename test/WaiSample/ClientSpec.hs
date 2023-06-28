@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
@@ -16,8 +17,8 @@ import           Test.QuickCheck          (property)
 import           Test.Syd                 (Spec, aroundAll, describe,
                                            itWithOuter, shouldReturn)
 
-import           WaiSample                (Customer (..), PlainText,
-                                           Response (Response),
+import           WaiSample                (ContentTypes, Customer (..), Json,
+                                           PlainText, Response (Response),
                                            SampleError (SampleError), Status503,
                                            WithStatus, headered, sumLift)
 import           WaiSample.Client         (httpClientBackend)
@@ -99,7 +100,7 @@ spec =
         let backend = buildBackend port manager
         sampleCreateProduct backend `shouldReturn` "Product created"
 
-      itWithOuter "customerHeadered reaturns a customer with \"X-RateLimit-Limit\" response header" $ \(manager, port) -> do
+      itWithOuter "customerHeadered returns a customer with \"X-RateLimit-*\" response header" $ \(manager, port) -> do
         let backend = buildBackend port manager
             exampleRateLimitReset = UTCTime (fromGregorian 2023 4 5) 864.5
             cId = 999
@@ -108,6 +109,25 @@ spec =
                 , customerId = cId
                 }
         sampleCustomerHeadered backend `shouldReturn` expected
+
+      itWithOuter "customerIdTxtHeadered returns a customer ID with \"X-RateLimit-*\" response header" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            exampleRateLimitReset = UTCTime (fromGregorian 2023 6 21) 864.5
+            cId = 200
+            expected = sumLift
+              . headered @"X-RateLimit-Limit" (90 :: Int)
+              . headered @"X-RateLimit-Reset" exampleRateLimitReset
+              $ "Customer " <> T.pack (show cId)
+        sampleCustomerIdTxtHeadered backend cId `shouldReturn` expected
+
+      itWithOuter "customerIdTxtHeadered returns an error given a customer ID 503" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            cId = 503
+            expected = sumLift
+              $ Response
+                @(WithStatus Status503 (ContentTypes '[Json, PlainText]))
+                (headered @"X-ErrorId" ("SERVER ERROR" :: T.Text) ("error" :: T.Text))
+        sampleCustomerIdTxtHeadered backend cId `shouldReturn` expected
 
 
 withServer :: (Port -> IO ()) -> IO ()
