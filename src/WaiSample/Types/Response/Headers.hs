@@ -41,6 +41,12 @@ instance Show resObj => Show (Headered '[] resObj) where
 instance (Show (Headered headers resObj), Show header) => Show (Headered (header ': headers) resObj) where
   show (AddHeader hdObj rest) = "(headered " ++ show hdObj ++ " " ++ show rest ++ ")"
 
+instance Eq resObj => Eq (Headered '[] resObj) where
+  (NoHeaders resObj0) == (NoHeaders resObj1) = resObj0 == resObj1
+
+instance (Eq (Headered headers resObj), Eq header) => Eq (Headered (header ': headers) resObj) where
+  (AddHeader hdObj0 rest0) == (AddHeader hdObj1 rest1) = hdObj0 == hdObj1 && rest0 == rest1
+
 
 -- Ref. https://hackage.haskell.org/package/servant-0.19.1/docs/src/Servant.API.ResponseHeaders.html#AddHeader
 class BuildHeadered (name :: Symbol) hdObj orig new
