@@ -69,15 +69,19 @@ sampleRoutes =
   , get @(ContentTypes '[Json, FormUrlEncoded], Customer)
       "customerId"
       (path "customer/" *> decimalPiece)
-      (return . customerOfId)
+      (return . customerOfId Nothing)
   , get @(Sum '[(Json, Customer), (WithStatus Status503 Json, SampleError)])
       "customerIdJson"
       -- /customer/:id.json
-      (path "customer/" *> decimalPiece <* path ".json")
-      (\i ->
+      -- NOTE: request headerはpath parserと同じ文脈で使えるようにする
+      -- TODO: optional (requestHeader "HEADER")と書いたとき、「"HEADER"をクライアントが送ってこなかった時」だけをNothingにすべき。"HEADER"の値が不正な文字列であった場合は、422 Unprocessable Entity（あるいはもっとふさわしいエラーがあればそれ）にすべき
+      -- TODO: decimalPiece のパースに失敗したときは 404 Not Found
+      -- TODO: requestHeader のパースに失敗したときは422 Unprocessable Entity（あるいはもっとふさわしいエラーがあればそれ）にするべき
+      (path "customer/" *> ((,) <$> decimalPiece <*> optional (requestHeader "X-API-VERSION")) <* path ".json")
+      (\(i, apiVersion) ->
         if i == 503
           then return . sumLift $ SampleError "Invalid Customer"
-          else return . sumLift $ customerOfId i)
+          else return . sumLift $ customerOfId apiVersion i)
   , get @(Sum '[(PlainText, T.Text), Response (WithStatus Status503 PlainText) T.Text])
       "customerIdTxt"
       -- /customer/:id.txt
@@ -108,7 +112,7 @@ sampleRoutes =
       (path "customerHeadered")
       (\_ -> do
         let exampleRateLimitReset = UTCTime (fromGregorian 2023 4 5) 864.5
-        return . headered 50 . headered exampleRateLimitReset $ customerOfId 999
+        return . headered 50 . headered exampleRateLimitReset $ customerOfId Nothing 999
         )
 
   , get @(
@@ -142,16 +146,18 @@ sampleRoutes =
               )
   ]
  where
-  customerOfId i =
+  customerOfId apiVersion i =
     Customer
       { customerName = "Mr. " <> T.pack (show i)
       , customerId = i
+      , customerApiVersion = apiVersion
       }
 
 
 data Customer = Customer
-  { customerName :: T.Text
-  , customerId   :: Integer
+  { customerName       :: T.Text
+  , customerId         :: Integer
+  , customerApiVersion :: Maybe Integer
   } deriving (Eq, Generic, Show, Lift)
 
 instance ToJSON Customer where
