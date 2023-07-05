@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor       #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -13,7 +14,7 @@ import qualified Data.List                 as L
 import           Data.Maybe                (fromMaybe, listToMaybe, mapMaybe)
 import qualified Data.Text                 as T
 import           Network.HTTP.Media        (matchAccept)
-import           Network.HTTP.Types.Header (hContentType)
+import           Network.HTTP.Types.Header (RequestHeaders, hContentType)
 import qualified Network.HTTP.Types.Status as HTS
 import           Network.Wai               (Application,
                                             Request (requestHeaders, requestMethod),
@@ -68,6 +69,18 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl hdl) req =
       else return $ responseLBS HTS.status405 [(hContentType, "text/plain;charset=UTF-8")] "405 Method not allowed."
 
   acceptHeader = fromMaybe "*/*" . L.lookup "Accept" $ requestHeaders req
+
+
+data RequestParser a =
+    ParsePath T.Text (AT.Parser a)
+  | ParseRequestHeader RequestHeaders (RequestHeaders -> Maybe a)
+  deriving Functor
+
+instance Applicative RequestParser where
+  pure = ParsePath "" . pure
+  (ParsePath t1 pf) <*> (ParsePath t2 px) = ParsePath (t1 <> t2) $ pf <*> px
+  (ParsePath t pf) <*> (ParseRequestHeader hs px) =
+
 
 
 parserFromRoutingTable :: Route a -> AT.Parser a

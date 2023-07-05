@@ -36,6 +36,7 @@ module WaiSample
   , printRoutes
   ) where
 
+import           Control.Applicative        (optional, (<|>))
 import           Data.Aeson                 (FromJSON, ToJSON)
 import qualified Data.Aeson                 as Json
 import           Data.Functor               (void)
@@ -77,7 +78,7 @@ sampleRoutes =
       -- TODO: optional (requestHeader "HEADER")と書いたとき、「"HEADER"をクライアントが送ってこなかった時」だけをNothingにすべき。"HEADER"の値が不正な文字列であった場合は、422 Unprocessable Entity（あるいはもっとふさわしいエラーがあればそれ）にすべき
       -- TODO: decimalPiece のパースに失敗したときは 404 Not Found
       -- TODO: requestHeader のパースに失敗したときは422 Unprocessable Entity（あるいはもっとふさわしいエラーがあればそれ）にするべき
-      (path "customer/" *> ((,) <$> decimalPiece <*> optional (requestHeader "X-API-VERSION")) <* path ".json")
+      (path "customer/" *> ((,) <$> decimalPiece <* path ".json" <*> optional (requestHeader "X-API-VERSION" <|> requestHeader "X-API-REVISION")))
       (\(i, apiVersion) ->
         if i == 503
           then return . sumLift $ SampleError "Invalid Customer"

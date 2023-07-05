@@ -4,9 +4,10 @@
 
 module WaiSample.Routes where
 
-import qualified Data.Text       as T
-import           Data.Typeable   (Typeable)
-import           Web.HttpApiData (FromHttpApiData, ToHttpApiData)
+import qualified Data.Text          as T
+import           Data.Typeable      (Typeable)
+import           Network.HTTP.Types (HeaderName)
+import           Web.HttpApiData    (FromHttpApiData, ToHttpApiData)
 
 import           WaiSample.Types
 
@@ -16,6 +17,10 @@ root = pure ()
 
 path :: T.Text -> Route T.Text
 path = LiteralPath
+
+
+requestHeader :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => HeaderName -> Route a
+requestHeader = RequestHeader
 
 
 -- :id of /for/example/users/:id
