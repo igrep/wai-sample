@@ -28,6 +28,7 @@ import           Network.HTTP.Types.Method        (Method)
 import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData)
 
+import           Network.HTTP.Types               (HeaderName)
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Response
 import           WaiSample.Types.Response.Headers
@@ -64,6 +65,29 @@ data Handler where
       , HasContentTypes (ResponseType resSpec)
       )
     => Proxy resSpec -> String -> Method -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
+
+
+class ToEndpointOptions opts a resSpec where
+  toEndpointOptions :: opts -> EndpointOptions a resSpec
+
+-- TODO: the default value's type should differ from the value with responder set properly.
+data EndpointOptions a resSpec = forall h. EndpointOptions
+  { headers   :: RequestHeaderParser h
+  , responder :: a -> RequestInfo h -> IO (ResponseObject resSpec)
+  }
+
+data RequestHeaderParser h where
+  RequestHeader :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => HeaderName -> RequestHeaderParser h
+
+  EmptyRequestHeader :: RequestHeaderParser a
+  -- | '<$>'
+  FmapRequestHeader :: (a -> b) -> RequestHeaderParser a -> RequestHeaderParser b
+  PureRequestHeader :: a -> RequestHeaderParser a
+  -- | '<*>'
+  ApRequestHeader :: RequestHeaderParser (a -> b) -> RequestHeaderParser a -> RequestHeaderParser b
+  AltRequestHeader :: RequestHeaderParser a -> RequestHeaderParser a -> RequestHeaderParser a
+
+newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)

@@ -78,11 +78,16 @@ sampleRoutes =
       -- TODO: optional (requestHeader "HEADER")と書いたとき、「"HEADER"をクライアントが送ってこなかった時」だけをNothingにすべき。"HEADER"の値が不正な文字列であった場合は、422 Unprocessable Entity（あるいはもっとふさわしいエラーがあればそれ）にすべき
       -- TODO: decimalPiece のパースに失敗したときは 404 Not Found
       -- TODO: requestHeader のパースに失敗したときは422 Unprocessable Entity（あるいはもっとふさわしいエラーがあればそれ）にするべき
-      (path "customer/" *> ((,) <$> decimalPiece <* path ".json" <*> optional (requestHeader "X-API-VERSION" <|> requestHeader "X-API-REVISION")))
-      (\(i, apiVersion) ->
-        if i == 503
-          then return . sumLift $ SampleError "Invalid Customer"
-          else return . sumLift $ customerOfId apiVersion i)
+      (path "customer/" *> (decimalPiece <* path ".json"))
+      options
+      { headers = optional (requestHeader "X-API-VERSION" <|> requestHeader "X-API-REVISION")
+      , responder =
+        \i requestInfo -> do
+          let apiVersion = requestHeaderValue requestInfo
+          if i == 503
+            then return . sumLift $ SampleError "Invalid Customer"
+            else return . sumLift $ customerOfId apiVersion i
+      }
   , get @(Sum '[(PlainText, T.Text), Response (WithStatus Status503 PlainText) T.Text])
       "customerIdTxt"
       -- /customer/:id.txt
