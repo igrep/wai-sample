@@ -28,8 +28,6 @@ import           Network.HTTP.Types.Method        (Method)
 import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData)
 
-import           Control.Applicative              (Alternative, empty, (<|>))
-import           Network.HTTP.Types               (HeaderName)
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Response
 import           WaiSample.Types.Response.Headers
@@ -40,21 +38,13 @@ import           WaiSample.Types.Status
 data Route a where
   LiteralPath :: T.Text -> Route T.Text
 
-  -- | '<$>'
   -- TODO: Rename into FmapRoute, PureRoute and ApRoute.
+  -- | '<$>'
   FmapPath :: (a -> b) -> Route a -> Route b
-
   PurePath :: a -> Route a
   -- | '<*>'
   ApPath :: Route (a -> b) -> Route a -> Route b
-
   ParsedPath :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => Route a
-
-  EmptyRoute :: Route a
-  -- | '<|>'
-  AltRoute :: Route a -> Route a -> Route a
-
-  RequestHeader :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => HeaderName -> Route a
 
 instance Functor Route where
   fmap = FmapPath
@@ -62,11 +52,6 @@ instance Functor Route where
 instance Applicative Route where
   pure = PurePath
   (<*>) = ApPath
-
-instance Alternative Route where
-  empty = EmptyRoute
-  (<|>) = AltRoute
-
 
 data Handler where
   Handler
