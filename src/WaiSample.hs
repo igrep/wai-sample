@@ -83,7 +83,7 @@ sampleRoutes =
       { headers = optional (requestHeader "X-API-VERSION" <|> requestHeader "X-API-REVISION")
       , responder =
         \i requestInfo -> do
-          let apiVersion = requestHeaderValue requestInfo
+          let apiVersion = requestHeadersValue requestInfo
           if i == 503
             then return . sumLift $ SampleError "Invalid Customer"
             else return . sumLift $ customerOfId apiVersion i
@@ -198,7 +198,7 @@ extractRoutingTable (Handler _resSpec _name _method tbl _hdl) = void tbl
 
 
 handler
-  :: forall resSpec a.
+  :: forall resSpec a opts h.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
   , Typeable resSpec
@@ -206,12 +206,12 @@ handler
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
   )
-  => String -> Method -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
+  => String -> Method -> Route a -> EndpointOptions a h (ResponseObject resSpec) -> Handler
 handler = Handler (Proxy :: Proxy resSpec)
 
 
 get, post, put, delete, patch
-  :: forall resSpec a.
+  :: forall resSpec a opts h.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
   , Typeable resSpec
@@ -219,7 +219,7 @@ get, post, put, delete, patch
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
   )
-  => String -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
+  => String -> Route a -> EndpointOptions a h (ResponseObject resSpec) -> Handler
 get name    = handler @resSpec @a name methodGet
 post name   = handler @resSpec @a name methodPost
 put name    = handler @resSpec @a name methodPut

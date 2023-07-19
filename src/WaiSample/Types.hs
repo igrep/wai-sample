@@ -12,6 +12,11 @@
 module WaiSample.Types
   ( Route (..)
   , Handler (..)
+  , EndpointOptions (..)
+  , options
+  , RequestInfo (..)
+  , RequestHeaderParser (..)
+  , requestHeader
   , WithStatus (..)
   , module WaiSample.Types.ContentTypes
   , module WaiSample.Types.Response.Headers
@@ -28,6 +33,7 @@ import           Network.HTTP.Types.Method        (Method)
 import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData)
 
+import           Data.Void                        (Void)
 import           Network.HTTP.Types               (HeaderName)
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Response
@@ -64,20 +70,25 @@ data Handler where
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)
       )
-    => Proxy resSpec -> String -> Method -> Route a -> (a -> IO (ResponseObject resSpec)) -> Handler
+    => Proxy resSpec -> String -> Method -> Route a -> EndpointOptions a h (ResponseObject resSpec) -> Handler
 
-
-class ToEndpointOptions opts a resSpec where
-  toEndpointOptions :: opts -> EndpointOptions a resSpec
 
 -- TODO: the default value's type should differ from the value with responder set properly.
-data EndpointOptions a resSpec = forall h. EndpointOptions
+data EndpointOptions a h resObj = EndpointOptions
   { headers   :: RequestHeaderParser h
-  , responder :: a -> RequestInfo h -> IO (ResponseObject resSpec)
+  , responder :: a -> RequestInfo h -> IO resObj
   }
 
+options :: EndpointOptions Void Void Void
+options = EndpointOptions
+  { headers = EmptyRequestHeader
+  , responder = error "Assertion failure: responder is not specified."
+  }
+
+newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
+
 data RequestHeaderParser h where
-  RequestHeader :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => HeaderName -> RequestHeaderParser h
+  RequestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeaderParser h
 
   EmptyRequestHeader :: RequestHeaderParser a
   -- | '<$>'
@@ -87,7 +98,8 @@ data RequestHeaderParser h where
   ApRequestHeader :: RequestHeaderParser (a -> b) -> RequestHeaderParser a -> RequestHeaderParser b
   AltRequestHeader :: RequestHeaderParser a -> RequestHeaderParser a -> RequestHeaderParser a
 
-newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
+requestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeaderParser h
+requestHeader = RequestHeader
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)
