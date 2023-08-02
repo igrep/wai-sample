@@ -71,7 +71,7 @@ sampleRoutes =
       "customerId"
       (path "customer/" *> decimalPiece)
       (return . customerOfId Nothing)
-  , get @(Sum '[(Json, Customer), (WithStatus Status503 Json, SampleError)])
+  , getWith @(Sum '[(Json, Customer), (WithStatus Status503 Json, SampleError)])
       "customerIdJson"
       -- /customer/:id.json
       -- NOTE: request headerはpath parserと同じ文脈で使えるようにする
@@ -81,13 +81,13 @@ sampleRoutes =
       (path "customer/" *> (decimalPiece <* path ".json"))
       options
       { headers = optional (requestHeader "X-API-VERSION" <|> requestHeader "X-API-REVISION")
-      , responder =
-        \i requestInfo -> do
-          let apiVersion = requestHeadersValue requestInfo
-          if i == 503
-            then return . sumLift $ SampleError "Invalid Customer"
-            else return . sumLift $ customerOfId apiVersion i
       }
+      (\i requestInfo -> do
+        let apiVersion = requestHeadersValue requestInfo
+        if i == 503
+          then return . sumLift $ SampleError "Invalid Customer"
+          else return . sumLift $ customerOfId apiVersion i
+        )
   , get @(Sum '[(PlainText, T.Text), Response (WithStatus Status503 PlainText) T.Text])
       "customerIdTxt"
       -- /customer/:id.txt
@@ -194,11 +194,11 @@ showRoutes :: [Handler] -> T.Text
 showRoutes = ("/" <>) . T.intercalate "\n/" . map (showRoutes' . extractRoutingTable)
 
 extractRoutingTable :: Handler -> Route ()
-extractRoutingTable (Handler _resSpec _name _method tbl _hdl) = void tbl
+extractRoutingTable (Handler _resSpec _name _method tbl _opts _hdl) = void tbl
 
 
 handler
-  :: forall resSpec a opts h.
+  :: forall resSpec a h.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
   , Typeable resSpec
@@ -206,12 +206,12 @@ handler
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
   )
-  => String -> Method -> Route a -> EndpointOptions a h (ResponseObject resSpec) -> Handler
+  => String -> Method -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
 handler = Handler (Proxy :: Proxy resSpec)
 
 
 get, post, put, delete, patch
-  :: forall resSpec a opts h.
+  :: forall resSpec a.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
   , Typeable resSpec
@@ -219,12 +219,29 @@ get, post, put, delete, patch
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
   )
-  => String -> Route a -> EndpointOptions a h (ResponseObject resSpec) -> Handler
-get name    = handler @resSpec @a name methodGet
-post name   = handler @resSpec @a name methodPost
-put name    = handler @resSpec @a name methodPut
-delete name = handler @resSpec @a name methodDelete
-patch name  = handler @resSpec @a name methodPatch
+  => String -> Route a -> SimpleResponder a (ResponseObject resSpec) -> Handler
+get name route respond   = getWith @resSpec @a name route options (\p _reqInfo -> respond p)
+post name route respond   = postWith @resSpec @a name route options (\p _reqInfo -> respond p)
+put name route respond    = putWith @resSpec @a name route options (\p _reqInfo -> respond p)
+delete name route respond = deleteWith @resSpec @a name route options (\p _reqInfo -> respond p)
+patch name  route respond = patchWith @resSpec @a name route options (\p _reqInfo -> respond p)
+
+
+getWith, postWith, putWith, deleteWith, patchWith
+  :: forall resSpec a h.
+  ( ToRawResponse resSpec
+  , FromRawResponse resSpec
+  , Typeable resSpec
+  , Typeable (ResponseObject resSpec)
+  , HasStatusCode (ResponseType resSpec)
+  , HasContentTypes (ResponseType resSpec)
+  )
+  => String -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
+getWith name    = handler @resSpec @a name methodGet
+postWith name   = handler @resSpec @a name methodPost
+putWith name    = handler @resSpec @a name methodPut
+deleteWith name = handler @resSpec @a name methodDelete
+patchWith name  = handler @resSpec @a name methodPatch
 
 
 printRoutes :: IO ()

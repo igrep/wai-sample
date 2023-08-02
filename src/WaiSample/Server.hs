@@ -13,7 +13,7 @@ import qualified Data.List                 as L
 import           Data.Maybe                (fromMaybe, listToMaybe, mapMaybe)
 import qualified Data.Text                 as T
 import           Network.HTTP.Media        (matchAccept)
-import           Network.HTTP.Types.Header (hContentType)
+import           Network.HTTP.Types.Header (HeaderName, hContentType)
 import qualified Network.HTTP.Types.Status as HTS
 import           Network.Wai               (Application,
                                             Request (requestHeaders, requestMethod),
@@ -46,7 +46,7 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
 
 
 runHandler :: Handler -> Request -> Maybe (IO Wai.Response)
-runHandler (Handler (_ :: Proxy resSpec) _name method tbl hdl) req =
+runHandler (Handler (_ :: Proxy resSpec) _name method tbl opts respond) req =
   act <$> runRoutingTable tbl req
  where
   act x =
@@ -55,7 +55,8 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl hdl) req =
         let mMime = matchAccept (contentTypes @(ResponseType resSpec)) acceptHeader
         case mMime of
             Just mime -> do
-              resObj <- hdl x
+              let reqHdObj = parseRequestHeaders (headers opts) req
+              resObj <- respond x (RequestInfo reqHdObj)
               rawRes <- toRawResponse @resSpec mime resObj
               let mst = rawStatusCode rawRes
                   stC =
@@ -81,3 +82,21 @@ parserFromRoutingTable ParsedPath = parseUrlPiece
 runRoutingTable :: Route a -> Request -> Maybe a
 runRoutingTable tbl =
   hush . AT.parseOnly (parserFromRoutingTable tbl <* AT.endOfInput) . T.intercalate "/" . pathInfo
+
+
+parseRequestHeaders :: RequestHeaderParser h -> Request -> Either RequestHeaderError h
+parseRequestHeaders rhp req = run rhp
+ where
+  run (RequestHeader name)         = _
+  run EmptyRequestHeader           = _
+  run (FmapRequestHeader f rhpA)   = _
+  run (PureRequestHeader x)        = _
+  run (ApRequestHeader rhpF rhpA)  = _
+  run (AltRequestHeader rhpA rhpB) = _
+  hds = requestHeaders req
+
+
+data RequestHeaderError =
+    NoHeader HeaderName
+  | UnprocessableValue HeaderName
+  deriving (Eq, Show)

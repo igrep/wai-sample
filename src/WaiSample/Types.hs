@@ -12,6 +12,8 @@
 module WaiSample.Types
   ( Route (..)
   , Handler (..)
+  , Responder
+  , SimpleResponder
   , EndpointOptions (..)
   , options
   , RequestInfo (..)
@@ -33,6 +35,7 @@ import           Network.HTTP.Types.Method        (Method)
 import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData)
 
+import           Control.Applicative              (Alternative (empty, (<|>)))
 import           Data.Void                        (Void)
 import           Network.HTTP.Types               (HeaderName)
 import           WaiSample.Types.ContentTypes
@@ -70,19 +73,27 @@ data Handler where
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)
       )
-    => Proxy resSpec -> String -> Method -> Route a -> EndpointOptions a h (ResponseObject resSpec) -> Handler
+    => Proxy resSpec
+    -> String
+    -> Method
+    -> Route a
+    -> EndpointOptions h
+    -> Responder a h (ResponseObject resSpec)
+    -> Handler
 
 
--- TODO: the default value's type should differ from the value with responder set properly.
-data EndpointOptions a h resObj = EndpointOptions
+type Responder a h resObj = a -> RequestInfo h -> IO resObj
+
+type SimpleResponder a resObj = a -> IO resObj
+
+
+newtype EndpointOptions h = EndpointOptions
   { headers   :: RequestHeaderParser h
-  , responder :: a -> RequestInfo h -> IO resObj
   }
 
-options :: EndpointOptions Void Void Void
+options :: EndpointOptions Void
 options = EndpointOptions
   { headers = EmptyRequestHeader
-  , responder = error "Assertion failure: responder is not specified."
   }
 
 newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
@@ -97,6 +108,18 @@ data RequestHeaderParser h where
   -- | '<*>'
   ApRequestHeader :: RequestHeaderParser (a -> b) -> RequestHeaderParser a -> RequestHeaderParser b
   AltRequestHeader :: RequestHeaderParser a -> RequestHeaderParser a -> RequestHeaderParser a
+
+instance Functor RequestHeaderParser where
+  fmap = FmapRequestHeader
+
+instance Applicative RequestHeaderParser where
+  pure = PureRequestHeader
+  (<*>) = ApRequestHeader
+
+instance Alternative RequestHeaderParser where
+  empty = EmptyRequestHeader
+  (<|>) = AltRequestHeader
+
 
 requestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeaderParser h
 requestHeader = RequestHeader
