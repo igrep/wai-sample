@@ -74,7 +74,6 @@ sampleRoutes =
   , getWith @(Sum '[(Json, Customer), (WithStatus Status503 Json, SampleError)])
       "customerIdJson"
       -- /customer/:id.json
-      -- NOTE: request headerはpath parserと同じ文脈で使えるようにする
       -- TODO: optional (requestHeader "HEADER")と書いたとき、「"HEADER"をクライアントが送ってこなかった時」だけをNothingにすべき。"HEADER"の値が不正な文字列であった場合は、422 Unprocessable Entity（あるいはもっとふさわしいエラーがあればそれ）にすべき
       -- TODO: decimalPiece のパースに失敗したときは 404 Not Found
       -- TODO: requestHeader のパースに失敗したときは422 Unprocessable Entity（あるいはもっとふさわしいエラーがあればそれ）にするべき
