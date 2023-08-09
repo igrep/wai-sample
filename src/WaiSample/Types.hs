@@ -101,13 +101,13 @@ newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
 data RequestHeaderParser h where
   RequestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeaderParser h
 
-  EmptyRequestHeader :: RequestHeaderParser a
+  EmptyRequestHeader :: RequestHeaderParser h
   -- | '<$>'
-  FmapRequestHeader :: (a -> b) -> RequestHeaderParser a -> RequestHeaderParser b
-  PureRequestHeader :: a -> RequestHeaderParser a
+  FmapRequestHeader :: (h -> i) -> RequestHeaderParser h -> RequestHeaderParser i
+  PureRequestHeader :: h -> RequestHeaderParser h
   -- | '<*>'
-  ApRequestHeader :: RequestHeaderParser (a -> b) -> RequestHeaderParser a -> RequestHeaderParser b
-  AltRequestHeader :: RequestHeaderParser a -> RequestHeaderParser a -> RequestHeaderParser a
+  ApRequestHeader :: RequestHeaderParser (h -> i) -> RequestHeaderParser h -> RequestHeaderParser i
+  AltRequestHeader :: RequestHeaderParser h -> RequestHeaderParser h -> RequestHeaderParser h
 
 instance Functor RequestHeaderParser where
   fmap = FmapRequestHeader
