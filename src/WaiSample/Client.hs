@@ -44,7 +44,15 @@ declareClient :: String -> [Handler] -> DecsQ
 declareClient prefix = fmap concat . mapM declareEndpointFunction
  where
   declareEndpointFunction :: Handler -> DecsQ
-  declareEndpointFunction (Handler (_ :: Proxy resSpec) handlerName meth tbl (_action :: a -> IO resObj)) = do
+  declareEndpointFunction
+    ( Handler
+        (_ :: Proxy resSpec)
+        handlerName
+        meth
+        tbl
+        (opts :: EndpointOptions h)
+        (_responder :: Responder a h resObj)
+    ) = do
     let funName = mkName $ makeUpName handlerName
         typeQResSpec = liftTypeQ @resSpec
         typeQRtn = [t| IO |] `appT` liftTypeQ @resObj
@@ -53,13 +61,19 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     let bd = mkName "bd"
         emsg = "Default MIME type not defined for " ++ show handlerName
         defaultMimeType = show . headNote emsg $ contentTypes @(ResponseType resSpec)
-    moreArgs <- argumentNamesFromRoutingTable tbl
-    let allArgs = varP bd : map varP moreArgs
-        p = pathBuilderFromRoutingTable moreArgs tbl
+        hdParser = headers opts
+
+    -- TODO: Generate data types for each request header argument
+    --       Don't generate anything if the hdParser is empty
+    hdArg <- argumentNameFromHeaderParser hdParser
+    pathArgs <- argumentNamesFromRoutingTable tbl
+    let allArgs = varP bd : map varP (pathArgs ++ [hdArg])
+        p = pathBuilderFromRoutingTable pathArgs tbl
+        hd = headerBuilderFromHeaderParser hdArg hdParser
         defaultStatus = liftHttpStatus $ defaultStatusCodeOf meth
         implE = [|
             do
-              res <- $(varE bd) (B.pack $(stringE $ B.unpack meth)) $ URI.encode $(p)
+              res <- $(varE bd) (B.pack $(stringE $ B.unpack meth)) (URI.encode $(p)) $(hd)
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypeFromServer = lookup headerName $ responseHeaders res
                   returnedContentType = fromMaybe (B.pack defaultMimeType) contentTypeFromServer
