@@ -22,7 +22,8 @@ import           Test.Syd          (Assertion (ExpectationFailed), Spec,
 import           Control.Monad     (when)
 import           Data.List         (isInfixOf, isSuffixOf)
 import           GHC.Stack         (HasCallStack)
-import           WaiSample         (Handler (Handler), Route (ApPath, FmapPath, LiteralPath, ParsedPath, PurePath),
+import           WaiSample         (Handler (Handler),
+                                    Route (ApPath, FmapPath, LiteralPath, ParsedPath, PurePath),
                                     Sum, decimalPiece, get, path)
 
 
@@ -38,7 +39,7 @@ rnfRoute (ApPath a b)    = seq a (seq b ())
 rnfRoute ParsedPath      = ()
 
 instance NFData NfHandler where
-  rnf (NfHandler (Handler a b c d e)) = rnf a <> rnf b <> rnf c <> rnfRoute d <> rnf e
+  rnf (NfHandler (Handler a b c d e f)) = rnf a <> rnf b <> rnf c <> rnfRoute d <> rnf e <> rnf f
 
 
 spec :: HasCallStack => Spec
