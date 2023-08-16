@@ -109,6 +109,8 @@ parseRequestHeaders rhp req = run rhp
     hdv <- maybe (Left (NoHeaderError name)) return $ lookup name hds
     either (const (Left $ UnprocessableValueError name)) return $
       parseOnly parseHeader hdv
+  -- TODO: Return the last error more specific than EmptyRequestHeaderError
+  --       to delete EmptyRequestHeaderError
   run EmptyRequestHeader           = Left EmptyRequestHeaderError
   run (FmapRequestHeader f rhpA)   = f <$> run rhpA
   run (PureRequestHeader x)        = pure x
