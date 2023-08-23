@@ -50,26 +50,26 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         handlerName
         meth
         tbl
-        (opts :: EndpointOptions h)
+        (_opts :: EndpointOptions h)
         (_responder :: Responder a h resObj)
     ) = do
     let funName = mkName $ makeUpName handlerName
         typeQResSpec = liftTypeQ @resSpec
         typeQRtn = [t| IO |] `appT` liftTypeQ @resObj
-    sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQRtn tbl
+        typeQTail = liftTypeQ @h `funcT` typeQRtn
+    sig <- sigD funName $  [t| Backend |] `funcT` (typeQFromRoutingTable typeQTail tbl)
 
     let bd = mkName "bd"
         emsg = "Default MIME type not defined for " ++ show handlerName
         defaultMimeType = show . headNote emsg $ contentTypes @(ResponseType resSpec)
-        hdParser = headers opts
+        hdArg mkName "reqHds"
 
     -- TODO: Generate data types for each request header argument
     --       Don't generate anything if the hdParser is empty
-    hdArg <- argumentNameFromHeaderParser hdParser
     pathArgs <- argumentNamesFromRoutingTable tbl
     let allArgs = varP bd : map varP (pathArgs ++ [hdArg])
         p = pathBuilderFromRoutingTable pathArgs tbl
-        hd = headerBuilderFromHeaderParser hdArg hdParser
+        hd = headerBuilderFromHeaderParser @h hdArg
         defaultStatus = liftHttpStatus $ defaultStatusCodeOf meth
         implE = [|
             do

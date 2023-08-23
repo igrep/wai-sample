@@ -64,8 +64,9 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl opts respond) req =
                       HTS.status422
                       [(hContentType, "text/plain;charset=UTF-8")]
                       ("422 Unprocessable Entity: " <> msg)
+                  _ :: Proxy h = headersType opts
 
-              case parseRequestHeaders (headers opts) req of
+              case parseRequestHeaders (requestHeadersCodec :: RequestHeadersCodec h) req of
                   Right reqHdObj -> do
                     resObj <- respond x (RequestInfo reqHdObj)
                     rawRes <- toRawResponse @resSpec mime resObj
@@ -101,10 +102,10 @@ runRoutingTable tbl =
   hush . AT.parseOnly (parserFromRoutingTable tbl <* AT.endOfInput) . T.intercalate "/" . pathInfo
 
 
-parseRequestHeaders :: RequestHeaderParser h -> Request -> Either RequestHeaderError h
+parseRequestHeaders :: RequestHeadersCodec h -> Request -> Either RequestHeaderError h
 parseRequestHeaders rhp req = run rhp
  where
-  run :: RequestHeaderParser h1 -> Either RequestHeaderError h1
+  run :: RequestHeadersCodec h1 -> Either RequestHeaderError h1
   run (RequestHeader name)         = do
     hdv <- maybe (Left (NoHeaderError name)) return $ lookup name hds
     either (const (Left $ UnprocessableValueError name)) return $

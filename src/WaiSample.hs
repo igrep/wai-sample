@@ -79,7 +79,7 @@ sampleRoutes =
       -- TODO: requestHeader のパースに失敗したときは422 Unprocessable Entity（あるいはもっとふさわしいエラーがあればそれ）にするべき
       (path "customer/" *> (decimalPiece <* path ".json"))
       options
-      { headers = optional (requestHeader "X-API-VERSION" <|> requestHeader "X-API-REVISION")
+      { headersType = Proxy :: Proxy (Maybe ApiVersion)
       }
       (\i requestInfo -> do
         let apiVersion = requestHeadersValue requestInfo
@@ -162,7 +162,7 @@ sampleRoutes =
 data Customer = Customer
   { customerName       :: T.Text
   , customerId         :: Integer
-  , customerApiVersion :: Maybe Integer
+  , customerApiVersion :: Maybe ApiVersion
   } deriving (Eq, Generic, Show, Lift)
 
 instance ToJSON Customer where
@@ -173,6 +173,13 @@ instance FromJSON Customer
 instance ToForm Customer
 
 instance FromForm Customer
+
+newtype ApiVersion = ApiVersion Integer
+  deriving (Eq, Generic, Show)
+
+instance HasRequestHeadersCodec ApiVersion where
+  requestHeadersCodec =
+    requestHeader "X-API-VERSION" <|> requestHeader "X-API-REVISION"
 
 
 newtype SampleError = SampleError

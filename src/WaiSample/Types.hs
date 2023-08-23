@@ -17,7 +17,8 @@ module WaiSample.Types
   , EndpointOptions (..)
   , options
   , RequestInfo (..)
-  , RequestHeaderParser (..)
+  , RequestHeadersCodec (..)
+  , HasRequestHeadersCodec (..)
   , requestHeader
   , WithStatus (..)
   , module WaiSample.Types.ContentTypes
@@ -27,7 +28,7 @@ module WaiSample.Types
   , module WaiSample.Types.Status
   ) where
 
-import           Data.Proxy                       (Proxy)
+import           Data.Proxy                       (Proxy (Proxy))
 import qualified Data.Text                        as T
 import           Data.Typeable                    (Typeable)
 import           Language.Haskell.TH.Syntax       (Lift)
@@ -35,7 +36,8 @@ import           Network.HTTP.Types.Method        (Method)
 import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData)
 
-import           Control.Applicative              (Alternative (empty, (<|>)))
+import           Control.Applicative              (Alternative (empty, (<|>)),
+                                                   optional)
 import           Data.Void                        (Void)
 import           Network.HTTP.Types               (HeaderName)
 import           WaiSample.Types.ContentTypes
@@ -72,6 +74,7 @@ data Handler where
       , Typeable (ResponseObject resSpec)
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)
+      , HasRequestHeadersCodec h
       )
     => Proxy resSpec
     -> String
@@ -88,40 +91,46 @@ type SimpleResponder a resObj = a -> IO resObj
 
 
 newtype EndpointOptions h = EndpointOptions
-  { headers   :: RequestHeaderParser h
+  { headersType :: Proxy h
   }
 
 options :: EndpointOptions Void
 options = EndpointOptions
-  { headers = EmptyRequestHeader
+  { headersType = Proxy
   }
 
 newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
 
-data RequestHeaderParser h where
-  RequestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeaderParser h
+data RequestHeadersCodec h where
+  RequestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeadersCodec h
 
-  EmptyRequestHeader :: RequestHeaderParser h
+  EmptyRequestHeader :: RequestHeadersCodec h
   -- | '<$>'
-  FmapRequestHeader :: (h -> i) -> RequestHeaderParser h -> RequestHeaderParser i
-  PureRequestHeader :: h -> RequestHeaderParser h
+  FmapRequestHeader :: (h -> i) -> RequestHeadersCodec h -> RequestHeadersCodec i
+  PureRequestHeader :: h -> RequestHeadersCodec h
   -- | '<*>'
-  ApRequestHeader :: RequestHeaderParser (h -> i) -> RequestHeaderParser h -> RequestHeaderParser i
-  AltRequestHeader :: RequestHeaderParser h -> RequestHeaderParser h -> RequestHeaderParser h
+  ApRequestHeader :: RequestHeadersCodec (h -> i) -> RequestHeadersCodec h -> RequestHeadersCodec i
+  AltRequestHeader :: RequestHeadersCodec h -> RequestHeadersCodec h -> RequestHeadersCodec h
 
-instance Functor RequestHeaderParser where
+instance Functor RequestHeadersCodec where
   fmap = FmapRequestHeader
 
-instance Applicative RequestHeaderParser where
+instance Applicative RequestHeadersCodec where
   pure = PureRequestHeader
   (<*>) = ApRequestHeader
 
-instance Alternative RequestHeaderParser where
+instance Alternative RequestHeadersCodec where
   empty = EmptyRequestHeader
   (<|>) = AltRequestHeader
 
+class HasRequestHeadersCodec h where
+  requestHeadersCodec :: RequestHeadersCodec h
 
-requestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeaderParser h
+instance HasRequestHeadersCodec h => HasRequestHeadersCodec (Maybe h) where
+  requestHeadersCodec = optional requestHeadersCodec
+
+
+requestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeadersCodec h
 requestHeader = RequestHeader
 
 
