@@ -1,16 +1,18 @@
-{-# LANGUAGE AllowAmbiguousTypes       #-}
-{-# LANGUAGE ApplicativeDo             #-}
-{-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DeriveLift                #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeApplications          #-}
+{-# LANGUAGE AllowAmbiguousTypes        #-}
+{-# LANGUAGE ApplicativeDo              #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DeriveLift                 #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeApplications           #-}
 
 module WaiSample
   ( sampleRoutes
@@ -36,7 +38,7 @@ module WaiSample
   , printRoutes
   ) where
 
-import           Control.Applicative        (optional, (<|>))
+import           Control.Applicative        ((<|>))
 import           Data.Aeson                 (FromJSON, ToJSON)
 import qualified Data.Aeson                 as Json
 import           Data.Functor               (void)
@@ -50,6 +52,7 @@ import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
                                              methodPatch, methodPost, methodPut)
 import           Web.FormUrlEncoded         (FromForm, ToForm)
+import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData)
 
 import           Data.Typeable              (Typeable)
 
@@ -175,7 +178,8 @@ instance ToForm Customer
 instance FromForm Customer
 
 newtype ApiVersion = ApiVersion Integer
-  deriving (Eq, Generic, Show)
+  deriving stock (Eq, Generic, Show, Lift)
+  deriving newtype (ToJSON, FromJSON, ToHttpApiData, FromHttpApiData)
 
 instance HasRequestHeadersCodec ApiVersion where
   requestHeadersCodec =
@@ -211,6 +215,8 @@ handler
   , Typeable (ResponseObject resSpec)
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
+  , Typeable h
+  , HasRequestHeadersCodec h
   )
   => String -> Method -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
 handler = Handler (Proxy :: Proxy resSpec)
@@ -241,6 +247,8 @@ getWith, postWith, putWith, deleteWith, patchWith
   , Typeable (ResponseObject resSpec)
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
+  , Typeable h
+  , HasRequestHeadersCodec h
   )
   => String -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
 getWith name    = handler @resSpec @a name methodGet

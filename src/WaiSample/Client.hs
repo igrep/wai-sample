@@ -62,10 +62,9 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     let bd = mkName "bd"
         emsg = "Default MIME type not defined for " ++ show handlerName
         defaultMimeType = show . headNote emsg $ contentTypes @(ResponseType resSpec)
-        hdArg mkName "reqHds"
+        hdArg = mkName "reqHds"
 
-    -- TODO: Generate data types for each request header argument
-    --       Don't generate anything if the hdParser is empty
+    -- TODO: Don't generate anything if the hdParser is empty
     pathArgs <- argumentNamesFromRoutingTable tbl
     let allArgs = varP bd : map varP (pathArgs ++ [hdArg])
         p = pathBuilderFromRoutingTable pathArgs tbl
@@ -73,7 +72,10 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         defaultStatus = liftHttpStatus $ defaultStatusCodeOf meth
         implE = [|
             do
-              res <- $(varE bd) (B.pack $(stringE $ B.unpack meth)) (URI.encode $(p)) $(hd)
+              let methB = B.pack $(stringE $ B.unpack meth)
+                  uri = URI.encode $(p)
+                  rawReqHds = $(hd)
+              res <- $(varE bd) methB uri rawReqHds
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypeFromServer = lookup headerName $ responseHeaders res
                   returnedContentType = fromMaybe (B.pack defaultMimeType) contentTypeFromServer
@@ -161,6 +163,18 @@ pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
       (arg0 : argsLeft) -> do
         SS.put argsLeft
         return arg0
+
+
+headerBuilderFromHeaderParser :: forall h. HasRequestHeadersCodec h => Name -> ExpQ
+headerBuilderFromHeaderParser qn = f (requestHeadersCodec @h)
+ where
+  -- TODO
+  f (RequestHeader hn)         = [| $(varE qn) |]
+  f EmptyRequestHeader         = [| $(varE qn) |]
+  f (FmapRequestHeader f vrh)  = [| $(varE qn) |]
+  f (PureRequestHeader v)      = [| $(varE qn) |]
+  f (ApRequestHeader frh vrh)  = [| $(varE qn) |]
+  f (AltRequestHeader arh brh) = [| $(varE qn) |]
 
 
 typeToNameQ :: forall t. Typeable t => Q Name

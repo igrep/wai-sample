@@ -74,6 +74,7 @@ data Handler where
       , Typeable (ResponseObject resSpec)
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)
+      , Typeable h
       , HasRequestHeadersCodec h
       )
     => Proxy resSpec
@@ -128,6 +129,9 @@ class HasRequestHeadersCodec h where
 
 instance HasRequestHeadersCodec h => HasRequestHeadersCodec (Maybe h) where
   requestHeadersCodec = optional requestHeadersCodec
+
+instance HasRequestHeadersCodec Void where
+  requestHeadersCodec = EmptyRequestHeader
 
 
 requestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeadersCodec h

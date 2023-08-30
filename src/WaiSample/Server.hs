@@ -50,7 +50,7 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
 
 
 runHandler :: Handler -> Request -> Maybe (IO Wai.Response)
-runHandler (Handler (_ :: Proxy resSpec) _name method tbl opts respond) req =
+runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOptions h) respond) req =
   act <$> runRoutingTable tbl req
  where
   act x =
@@ -64,7 +64,6 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl opts respond) req =
                       HTS.status422
                       [(hContentType, "text/plain;charset=UTF-8")]
                       ("422 Unprocessable Entity: " <> msg)
-                  _ :: Proxy h = headersType opts
 
               case parseRequestHeaders (requestHeadersCodec :: RequestHeadersCodec h) req of
                   Right reqHdObj -> do
