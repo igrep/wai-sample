@@ -32,12 +32,12 @@ import           Network.HTTP.Client        (Manager, httpLbs, parseUrlThrow,
                                              setRequestIgnoreStatus)
 import qualified Network.HTTP.Client        as HC
 import           Network.HTTP.Media         (parseAccept)
-import           Network.HTTP.Types.Method  (Method)
+import           Network.HTTP.Types         (Method, RequestHeaders)
 import qualified Network.URI.Encode         as URI
 import           Safe                       (headNote)
 import           WaiSample
 import           WaiSample.Internal
-import           Web.HttpApiData            (toUrlPiece)
+import           Web.HttpApiData            (toHeader, toUrlPiece)
 
 
 declareClient :: String -> [Handler] -> DecsQ
@@ -68,14 +68,13 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     pathArgs <- argumentNamesFromRoutingTable tbl
     let allArgs = varP bd : map varP (pathArgs ++ [hdArg])
         p = pathBuilderFromRoutingTable pathArgs tbl
-        hd = headerBuilderFromHeaderParser @h hdArg
+        hd = headerBuilderFromHeaderCodec @h hdArg
         defaultStatus = liftHttpStatus $ defaultStatusCodeOf meth
         implE = [|
             do
-              let methB = B.pack $(stringE $ B.unpack meth)
-                  uri = URI.encode $(p)
+              let uri = URI.encode $(p)
                   rawReqHds = $(hd)
-              res <- $(varE bd) methB uri rawReqHds
+              res <- $(varE bd) $(liftByteString meth) uri rawReqHds
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypeFromServer = lookup headerName $ responseHeaders res
                   returnedContentType = fromMaybe (B.pack defaultMimeType) contentTypeFromServer
@@ -143,6 +142,7 @@ pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
   go :: Route b -> SS.State [Name] ExpQ
   go (LiteralPath p) =
     return [| $(stringE $ T.unpack p) |]
+  -- TODO: I'm not really sure ignoring f here is correct. Test it.
   go (FmapPath _f tbl) =
     go tbl
   go (PurePath _x) =
@@ -165,16 +165,18 @@ pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
         return arg0
 
 
-headerBuilderFromHeaderParser :: forall h. HasRequestHeadersCodec h => Name -> ExpQ
-headerBuilderFromHeaderParser qn = f (requestHeadersCodec @h)
+headerBuilderFromHeaderCodec :: forall h. HasRequestHeadersCodec h => Name -> ExpQ
+headerBuilderFromHeaderCodec qn = f [| $(varE qn) |] (requestHeadersCodec @h)
  where
-  -- TODO
-  f (RequestHeader hn)         = [| $(varE qn) |]
-  f EmptyRequestHeader         = [| $(varE qn) |]
-  f (FmapRequestHeader f vrh)  = [| $(varE qn) |]
-  f (PureRequestHeader v)      = [| $(varE qn) |]
-  f (ApRequestHeader frh vrh)  = [| $(varE qn) |]
-  f (AltRequestHeader arh brh) = [| $(varE qn) |]
+  -- b :: RequestHeaders
+  f :: ExpQ -> RequestHeadersCodec i -> ExpQ
+  f expq (RequestHeader hn)         = [| [($(liftCIBS hn), toHeader $(expq))] |]
+  f _expq EmptyRequestHeader        = [| [] |]
+  -- TODO: I'm not really sure ignoring f here is correct. Test it.
+  f expq (FmapRequestHeader _f vrh) = f expq vrh
+  f _expq (PureRequestHeader _v)    = [| [] |]
+  f expq (ApRequestHeader frh vrh)  = [| $(f expq frh) ++ $(f expq vrh) |]
+  f expq (AltRequestHeader arh brh) = [| $(f expq arh) ++ $(f expq brh) |]
 
 
 typeToNameQ :: forall t. Typeable t => Q Name
@@ -195,10 +197,19 @@ funcT a b = [t| (->) |] `appT` a `appT` b
 infixr 1 `funcT`
 
 
-type Backend = Method -> String -> IO (HC.Response BL.ByteString)
+liftByteString :: B.ByteString -> ExpQ
+liftByteString bs = [| B.pack $(stringE $ B.unpack bs) |]
+
+
+liftCIBS :: CI.CI B.ByteString -> ExpQ
+liftCIBS cibs = [| CI.mk $(liftByteString $ CI.foldedCase cibs) |]
+
+
+type Backend = Method -> String -> RequestHeaders -> IO (HC.Response BL.ByteString)
 
 
 httpClientBackend :: String -> Manager -> Backend
-httpClientBackend rootUrl manager method pathPieces = do
-  req <- parseUrlThrow $ B.unpack method ++ " " ++ rootUrl ++ pathPieces
-  httpLbs (setRequestIgnoreStatus  req) manager
+httpClientBackend rootUrl manager method pathPieces rawReqHds = do
+  req0 <- parseUrlThrow $ B.unpack method ++ " " ++ rootUrl ++ pathPieces
+  let req = req0 { HC.requestHeaders = rawReqHds }
+  httpLbs (setRequestIgnoreStatus req) manager
