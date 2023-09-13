@@ -57,7 +57,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         typeQResSpec = liftTypeQ @resSpec
         typeQRtn = [t| IO |] `appT` liftTypeQ @resObj
         typeQTail = liftTypeQ @h `funcT` typeQRtn
-    sig <- sigD funName $  [t| Backend |] `funcT` (typeQFromRoutingTable typeQTail tbl)
+    sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQTail tbl
 
     let bd = mkName "bd"
         emsg = "Default MIME type not defined for " ++ show handlerName
