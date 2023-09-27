@@ -229,5 +229,6 @@ type Backend = Method -> String -> RequestHeaders -> IO (HC.Response BL.ByteStri
 httpClientBackend :: String -> Manager -> Backend
 httpClientBackend rootUrl manager method pathPieces rawReqHds = do
   req0 <- parseUrlThrow $ B.unpack method ++ " " ++ rootUrl ++ pathPieces
+  -- TODO: Avoid to overwrite the request headers?
   let req = req0 { HC.requestHeaders = rawReqHds }
   httpLbs (setRequestIgnoreStatus req) manager
