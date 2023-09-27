@@ -58,6 +58,7 @@ spec =
           let expected = Customer
                 { customerName = "Mr. " <> T.pack (show cId)
                 , customerId = cId
+                , customerApiVersion = Nothing
                 }
           sampleCustomerId backend cId `shouldReturn` expected
 
@@ -68,13 +69,14 @@ spec =
                 { customerName = "Mr. " <> T.pack (show cId)
                 -- `customerIdJson` returns an Error if cId is 503 as the next test shows.
                 , customerId = if cId == 503 then 504 else cId
+                , customerApiVersion = Nothing
                 }
-          sampleCustomerIdJson backend cId `shouldReturn` sumLift expected
+          sampleCustomerIdJson backend cId Nothing `shouldReturn` sumLift expected
 
       itWithOuter "customerIdJson returns an error object if customerId is 503" $ \(manager, port) -> do
         let backend = buildBackend port manager
             expected = SampleError "Invalid Customer"
-        sampleCustomerIdJson backend 503 `shouldReturn` sumLift expected
+        sampleCustomerIdJson backend 503 Nothing `shouldReturn` sumLift expected
 
       itWithOuter "customerIdTxt returns the Customer ID" $ \(manager, port) -> do
         let backend = buildBackend port manager
@@ -107,6 +109,7 @@ spec =
             expected = headered 50 . headered exampleRateLimitReset $ Customer
                 { customerName = "Mr. " <> T.pack (show cId)
                 , customerId = cId
+                , customerApiVersion = Nothing
                 }
         sampleCustomerHeadered backend `shouldReturn` expected
 

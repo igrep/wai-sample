@@ -77,7 +77,7 @@ spec =
             "{\"customerName\":\"Mr. " <> cId <> "\","
               <> "\"customerId\":"
               <> cId
-              <> "}"
+              <> ",\"customerApiVersion\":null}"
       assertBody expectedBody res
       assertHeader "Content-Type" "application/json" res
 
@@ -113,7 +113,7 @@ spec =
             "{\"customerName\":\"Mr. " <> cId <> "\","
               <> "\"customerId\":"
               <> cId
-              <> "}"
+              <> ",\"customerApiVersion\":null}"
       assertBody expectedBody res
       assertHeader "Content-Type" "application/json" res
 
@@ -216,7 +216,7 @@ spec =
             "{\"customerName\":\"Mr. " <> cId <> "\","
               <> "\"customerId\":"
               <> cId
-              <> "}"
+              <> ",\"customerApiVersion\":null}"
           expectedHeaders =
             [ ("Content-Type", "application/json")
             , ("X-RateLimit-Limit", "50")
