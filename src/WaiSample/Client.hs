@@ -53,22 +53,31 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         (_opts :: EndpointOptions h)
         (_responder :: Responder a h resObj)
     ) = do
+    let hdArg = mkName "reqHds"
+        hdC = requestHeadersCodec @h
+        hd = headerBuilderFromHeaderCodec hdArg hdC
+        hasReqHdArg = hasRequestHeadersArgument hdC
+
     let funName = mkName $ makeUpName handlerName
         typeQResSpec = liftTypeQ @resSpec
         typeQRtn = [t| IO |] `appT` liftTypeQ @resObj
-        typeQTail = liftTypeQ @h `funcT` typeQRtn
+        typeQTail =
+          if hasReqHdArg
+            then liftTypeQ @h `funcT` typeQRtn
+            else typeQRtn
     sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQTail tbl
 
     let bd = mkName "bd"
         emsg = "Default MIME type not defined for " ++ show handlerName
         defaultMimeType = show . headNote emsg $ contentTypes @(ResponseType resSpec)
-        hdArg = mkName "reqHds"
 
-    -- TODO: Don't generate anything if the hdParser is empty
-    pathArgs <- argumentNamesFromRoutingTable tbl
-    let allArgs = varP bd : map varP (pathArgs ++ [hdArg])
-        p = pathBuilderFromRoutingTable pathArgs tbl
-        hd = headerBuilderFromHeaderCodec @h hdArg
+    pathNameArgs <- argumentNamesFromRoutingTable tbl
+    let argNames =
+          if hasReqHdArg
+            then bd : pathNameArgs ++ [hdArg]
+            else bd : pathNameArgs
+        allArgs = map varP argNames
+        p = pathBuilderFromRoutingTable pathNameArgs tbl
         defaultStatus = liftHttpStatus $ defaultStatusCodeOf meth
         implE = [|
             do
@@ -165,8 +174,8 @@ pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
         return arg0
 
 
-headerBuilderFromHeaderCodec :: forall h. HasRequestHeadersCodec h => Name -> ExpQ
-headerBuilderFromHeaderCodec qn = f [| $(varE qn) |] (requestHeadersCodec @h)
+headerBuilderFromHeaderCodec :: forall h. Name -> RequestHeadersCodec h -> ExpQ
+headerBuilderFromHeaderCodec qn = f [| $(varE qn) |]
  where
   -- b :: RequestHeaders
   f :: ExpQ -> RequestHeadersCodec i -> ExpQ
@@ -177,6 +186,15 @@ headerBuilderFromHeaderCodec qn = f [| $(varE qn) |] (requestHeadersCodec @h)
   f _expq (PureRequestHeader _v)    = [| [] |]
   f expq (ApRequestHeader frh vrh)  = [| $(f expq frh) ++ $(f expq vrh) |]
   f expq (AltRequestHeader arh brh) = [| $(f expq arh) ++ $(f expq brh) |]
+
+
+hasRequestHeadersArgument :: RequestHeadersCodec h -> Bool
+hasRequestHeadersArgument (RequestHeader _hn)        = True
+hasRequestHeadersArgument EmptyRequestHeader         = False
+hasRequestHeadersArgument (FmapRequestHeader _f vrh) = hasRequestHeadersArgument vrh
+hasRequestHeadersArgument (PureRequestHeader _v)     = False
+hasRequestHeadersArgument (ApRequestHeader frh vrh)  = hasRequestHeadersArgument frh || hasRequestHeadersArgument vrh
+hasRequestHeadersArgument (AltRequestHeader arh brh) = hasRequestHeadersArgument arh || hasRequestHeadersArgument brh
 
 
 typeToNameQ :: forall t. Typeable t => Q Name
