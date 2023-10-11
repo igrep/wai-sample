@@ -98,7 +98,7 @@ spec =
                   `addHeader` ("Accept", "image/*")
       res <- request req
       assertStatus 406 res
-      assertBody "406 Not Acceptable" res
+      assertBody "406 Not Acceptable." res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
     it "GET /customer/:customerId.json returns a JSON" . runStateTClientState $ do
