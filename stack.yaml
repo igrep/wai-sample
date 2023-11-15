@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-21.11
+resolver: lts-21.20
 allow-newer: true
 
 # User packages to be built.
@@ -42,6 +42,7 @@ packages:
 #
 extra-deps:
 - ./http-api-data/
+- ./product-isomorphic/
 
 # Override default flag values for local packages and extra-deps
 flags:
