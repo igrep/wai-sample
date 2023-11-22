@@ -28,6 +28,7 @@ module WaiSample.Types
   , module WaiSample.Types.Status
   ) where
 
+import Data.Functor.ProductIsomorphic ((|$|), (|*|), ProductIsoFunctor, ProductIsoApplicative, pureP, ProductIsoAlternative, emptyP, (|||), ProductConstructor)
 import           Data.Proxy                       (Proxy (Proxy))
 import qualified Data.Text                        as T
 import           Data.Typeable                    (Typeable)
@@ -36,8 +37,6 @@ import           Network.HTTP.Types.Method        (Method)
 import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData)
 
-import           Control.Applicative              (Alternative (empty, (<|>)),
-                                                   optional)
 import           Data.Void                        (Void)
 import           Network.HTTP.Types               (HeaderName)
 import           WaiSample.Types.ContentTypes
@@ -45,25 +44,26 @@ import           WaiSample.Types.Response
 import           WaiSample.Types.Response.Headers
 import           WaiSample.Types.Response.Sum
 import           WaiSample.Types.Status
+import Data.Functor.ProductIsomorphic.Unsafe (productConstructor)
 
 
 data Route a where
   LiteralPath :: T.Text -> Route T.Text
 
   -- TODO: Rename into FmapRoute, PureRoute and ApRoute.
-  -- | '<$>'
+  -- | '|$|'
   FmapPath :: (a -> b) -> Route a -> Route b
   PurePath :: a -> Route a
-  -- | '<*>'
+  -- | '|*|'
   ApPath :: Route (a -> b) -> Route a -> Route b
   ParsedPath :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => Route a
 
-instance Functor Route where
-  fmap = FmapPath
+instance ProductIsoFunctor Route where
+  (|$|) = FmapPath
 
-instance Applicative Route where
-  pure = PurePath
-  (<*>) = ApPath
+instance ProductIsoApplicative Route where
+  pureP = PurePath
+  (|*|) = ApPath
 
 data Handler where
   Handler
@@ -113,22 +113,29 @@ data RequestHeadersCodec h where
   ApRequestHeader :: RequestHeadersCodec (h -> i) -> RequestHeadersCodec h -> RequestHeadersCodec i
   AltRequestHeader :: RequestHeadersCodec h -> RequestHeadersCodec h -> RequestHeadersCodec h
 
-instance Functor RequestHeadersCodec where
-  fmap = FmapRequestHeader
+instance ProductIsoFunctor RequestHeadersCodec where
+  (|$|) = FmapRequestHeader
 
-instance Applicative RequestHeadersCodec where
-  pure = PureRequestHeader
-  (<*>) = ApRequestHeader
+instance ProductIsoApplicative RequestHeadersCodec where
+  pureP = PureRequestHeader
+  (|*|) = ApRequestHeader
 
-instance Alternative RequestHeadersCodec where
-  empty = EmptyRequestHeader
-  (<|>) = AltRequestHeader
+instance ProductIsoAlternative RequestHeadersCodec where
+  emptyP = EmptyRequestHeader
+  (|||) = AltRequestHeader
 
 class HasRequestHeadersCodec h where
   requestHeadersCodec :: RequestHeadersCodec h
 
+instance ProductConstructor (a -> Maybe a) where
+  productConstructor = Just
+
+instance ProductConstructor (Maybe a) where
+  productConstructor = Nothing
+
 instance HasRequestHeadersCodec h => HasRequestHeadersCodec (Maybe h) where
-  requestHeadersCodec = optional requestHeadersCodec
+  requestHeadersCodec =
+    (Just |$| requestHeadersCodec) ||| pureP Nothing
 
 instance HasRequestHeadersCodec Void where
   requestHeadersCodec = EmptyRequestHeader
