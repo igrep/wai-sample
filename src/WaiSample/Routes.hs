@@ -4,14 +4,15 @@
 
 module WaiSample.Routes where
 
-import qualified Data.Text       as T
-import           Data.Typeable   (Typeable)
-import           Web.HttpApiData (FromHttpApiData, ToHttpApiData)
+import           Data.Functor.ProductIsomorphic (pureP)
+import qualified Data.Text                      as T
+import           Data.Typeable                  (Typeable)
+import           Web.HttpApiData                (FromHttpApiData, ToHttpApiData)
 
 import           WaiSample.Types
 
 root :: Route ()
-root = pure ()
+root = pureP ()
 
 
 path :: T.Text -> Route T.Text

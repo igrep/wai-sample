@@ -156,10 +156,3 @@ parseRequestHeaders rhp req = run rhp []
       Left EmptyRequestHeaderError           -> run rhpB notFounds
       Left e@(UnprocessableValueError _name) -> Left e
   hds = requestHeaders req
-
-
-data RequestHeaderError =
-    NoHeaderError (NE.NonEmpty HeaderName)
-  | EmptyRequestHeaderError
-  | UnprocessableValueError HeaderName
-  deriving (Eq, Show)

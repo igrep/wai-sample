@@ -4,6 +4,3 @@
 [submodule "sydtest"]
 	path = sydtest
 	url = https://github.com/igrep/sydtest.git
-[submodule "product-isomorphic"]
-	path = product-isomorphic
-	url = https://github.com/igrep/haskell-product-isomorphic.git

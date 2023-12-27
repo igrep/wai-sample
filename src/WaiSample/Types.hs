@@ -18,7 +18,9 @@ module WaiSample.Types
   , options
   , RequestInfo (..)
   , RequestHeadersCodec (..)
-  , HasRequestHeadersCodec (..)
+  , ToRequestHeaders (..)
+  , FromRequestHeaders (..)
+  , RequestHeaderError (..)
   , requestHeader
   , WithStatus (..)
   , module WaiSample.Types.ContentTypes
@@ -28,23 +30,25 @@ module WaiSample.Types
   , module WaiSample.Types.Status
   ) where
 
-import Data.Functor.ProductIsomorphic ((|$|), (|*|), ProductIsoFunctor, ProductIsoApplicative, pureP, ProductIsoAlternative, emptyP, (|||), ProductConstructor)
+import           Data.Functor.ProductIsomorphic   (ProductIsoApplicative,
+                                                   ProductIsoFunctor, pureP,
+                                                   (|$|), (|*|))
+import qualified Data.List.NonEmpty               as NE
 import           Data.Proxy                       (Proxy (Proxy))
 import qualified Data.Text                        as T
 import           Data.Typeable                    (Typeable)
+import           Data.Void                        (Void)
 import           Language.Haskell.TH.Syntax       (Lift)
 import           Network.HTTP.Types.Method        (Method)
 import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData)
 
-import           Data.Void                        (Void)
-import           Network.HTTP.Types               (HeaderName)
+import           Network.HTTP.Types               (HeaderName, RequestHeaders)
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Response
 import           WaiSample.Types.Response.Headers
 import           WaiSample.Types.Response.Sum
 import           WaiSample.Types.Status
-import Data.Functor.ProductIsomorphic.Unsafe (productConstructor)
 
 
 data Route a where
@@ -75,7 +79,8 @@ data Handler where
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)
       , Typeable h
-      , HasRequestHeadersCodec h
+      , ToRequestHeaders h
+      , FromRequestHeaders h
       )
     => Proxy resSpec
     -> String
@@ -102,43 +107,28 @@ options = EndpointOptions
 
 newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
 
+{-
+  data Hoge = Hoge
+    { a :: Int --> X-FOOBAR-HOGE-A
+    , b :: String --> X-FOOBAR-BAZ-B
+    }
+  -}
+
 data RequestHeadersCodec h where
   RequestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeadersCodec h
 
-  EmptyRequestHeader :: RequestHeadersCodec h
-  -- | '<$>'
-  FmapRequestHeader :: (h -> i) -> RequestHeadersCodec h -> RequestHeadersCodec i
-  PureRequestHeader :: h -> RequestHeadersCodec h
-  -- | '<*>'
-  ApRequestHeader :: RequestHeadersCodec (h -> i) -> RequestHeadersCodec h -> RequestHeadersCodec i
-  AltRequestHeader :: RequestHeadersCodec h -> RequestHeadersCodec h -> RequestHeadersCodec h
+class ToRequestHeaders h where
+  toRequestHeaders :: h -> RequestHeaders
 
-instance ProductIsoFunctor RequestHeadersCodec where
-  (|$|) = FmapRequestHeader
+class FromRequestHeaders h where
+  fromRequestHeaders :: RequestHeaders -> Either RequestHeaderError h
 
-instance ProductIsoApplicative RequestHeadersCodec where
-  pureP = PureRequestHeader
-  (|*|) = ApRequestHeader
 
-instance ProductIsoAlternative RequestHeadersCodec where
-  emptyP = EmptyRequestHeader
-  (|||) = AltRequestHeader
-
-class HasRequestHeadersCodec h where
-  requestHeadersCodec :: RequestHeadersCodec h
-
-instance ProductConstructor (a -> Maybe a) where
-  productConstructor = Just
-
-instance ProductConstructor (Maybe a) where
-  productConstructor = Nothing
-
-instance HasRequestHeadersCodec h => HasRequestHeadersCodec (Maybe h) where
-  requestHeadersCodec =
-    (Just |$| requestHeadersCodec) ||| pureP Nothing
-
-instance HasRequestHeadersCodec Void where
-  requestHeadersCodec = EmptyRequestHeader
+data RequestHeaderError =
+    NoHeaderError (NE.NonEmpty HeaderName)
+  | EmptyRequestHeaderError
+  | UnprocessableValueError HeaderName
+  deriving (Eq, Show)
 
 
 requestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeadersCodec h

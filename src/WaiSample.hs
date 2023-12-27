@@ -41,20 +41,23 @@ module WaiSample
 import           Control.Applicative        ((<|>))
 import           Data.Aeson                 (FromJSON, ToJSON)
 import qualified Data.Aeson                 as Json
+import qualified Data.Attoparsec.ByteString as ABS
+import qualified Data.ByteString.Char8      as BS
 import           Data.Functor               (void)
+import           Data.List.NonEmpty         (NonEmpty ((:|)))
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import qualified Data.Text.IO               as TIO
 import           Data.Time                  (fromGregorian)
 import           Data.Time.Clock            (UTCTime (UTCTime))
+import           Data.Typeable              (Typeable)
 import           GHC.Generics               (Generic)
 import           Language.Haskell.TH.Syntax (Lift)
 import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
                                              methodPatch, methodPost, methodPut)
 import           Web.FormUrlEncoded         (FromForm, ToForm)
-import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData)
-
-import           Data.Typeable              (Typeable)
+import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData,
+                                             parseHeader)
 
 import           WaiSample.Routes
 import           WaiSample.Types
@@ -181,9 +184,22 @@ newtype ApiVersion = ApiVersion Integer
   deriving stock (Eq, Generic, Show, Lift)
   deriving newtype (ToJSON, FromJSON, ToHttpApiData, FromHttpApiData)
 
-instance HasRequestHeadersCodec ApiVersion where
-  requestHeadersCodec =
-    requestHeader "X-API-VERSION" <|> requestHeader "X-API-REVISION"
+instance ToRequestHeaders ApiVersion where
+  toRequestHeaders (ApiVersion i) = [("X-API-VERSION", BS.pack (show i))]
+
+instance FromRequestHeaders ApiVersion where
+  -- TODO: How to chain RequestHeaderError-s and Right-s?
+  fromRequestHeaders rhds = decode "X-API-VERSION" <|> decode "X-API-REVISION"
+   where
+    decode hdn =
+      case lookup hdn rhds of
+        Nothing ->
+          Left $ NoHeaderError $ hdn :| []
+        Just v  ->
+          case ABS.parse (parseHeader <* ABS.endOfInput) v of
+              ABS.Fail {}   -> Left $ UnprocessableValueError hdn
+              ABS.Partial _ -> error "Assertion failed: fromRequestHeaders: unexpected Partial returned by ABS.parse"
+              ABS.Done _ r  -> Right r
 
 
 newtype SampleError = SampleError
@@ -216,7 +232,8 @@ handler
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
   , Typeable h
-  , HasRequestHeadersCodec h
+  , ToRequestHeaders h
+  , FromRequestHeaders h
   )
   => String -> Method -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
 handler = Handler (Proxy :: Proxy resSpec)
@@ -248,7 +265,8 @@ getWith, postWith, putWith, deleteWith, patchWith
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
   , Typeable h
-  , HasRequestHeadersCodec h
+  , ToRequestHeaders h
+  , FromRequestHeaders h
   )
   => String -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
 getWith name    = handler @resSpec @a name methodGet
