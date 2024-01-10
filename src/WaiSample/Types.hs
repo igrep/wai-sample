@@ -1,13 +1,15 @@
-{-# LANGUAGE AllowAmbiguousTypes   #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveLift            #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE AllowAmbiguousTypes        #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveLift                 #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeApplications           #-}
 
 module WaiSample.Types
   ( Route (..)
@@ -30,6 +32,7 @@ module WaiSample.Types
   , module WaiSample.Types.Status
   ) where
 
+import qualified Data.Attoparsec.ByteString       as ABS
 import           Data.Functor.ProductIsomorphic   (ProductIsoApplicative,
                                                    ProductIsoFunctor, pureP,
                                                    (|$|), (|*|))
@@ -49,6 +52,7 @@ import           WaiSample.Types.Response
 import           WaiSample.Types.Response.Headers
 import           WaiSample.Types.Response.Sum
 import           WaiSample.Types.Status
+import           Web.Internal.HttpApiData         (parseHeader)
 
 
 data Route a where
@@ -121,12 +125,43 @@ class ToRequestHeaders h where
   toRequestHeaders :: h -> RequestHeaders
 
 class FromRequestHeaders h where
-  fromRequestHeaders :: RequestHeaders -> Either RequestHeaderError h
+  fromRequestHeaders :: RequestHeaders -> FromRequestHeadersResult h
+
+
+newtype FromRequestHeadersResult h =
+  FromRequestHeadersResult { unFromRequestHeadersResult :: Either RequestHeaderError h }
+  deriving stock (Eq, Show)
+  deriving newtype (Functor, Applicative, Monad)
+
+
+-- | Choose one from a couple of 'FromRequestHeadersResult's.
+--   * If the first argument is 'Right', it returns the first argument.
+--   * If the first argument is 'NoHeaderError', it returns the second argument.
+--   * If the first argument is 'UnprocessableValueError', where the header value is invalid,
+--     it immediately returns as an error instead of the second argument.
+orHeader :: FromRequestHeadersResult h -> FromRequestHeadersResult h -> FromRequestHeadersResult h
+orHeader (FromRequestHeadersResult frhr1) (FromRequestHeadersResult frhr2) =
+  case frhr1 of
+    Right v -> return v
+    Left (NoHeaderError hdns) -> FromRequestHeadersResult frhr2
+    Left (UnprocessableValueError hdn) ->
+      FromRequestHeadersResult . Left $ UnprocessableValueError hdn
+
+
+decodeHeader :: FromHttpApiData h => HeaderName -> RequestHeaders -> FromRequestHeadersResult h
+decodeHeader hdn rhds =
+  case lookup hdn rhds of
+    Nothing ->
+      FromRequestHeadersResult . Left . NoHeaderError $ hdn NE.:| []
+    Just v  ->
+      case ABS.parse (parseHeader <* ABS.endOfInput) v of
+        ABS.Fail {}   -> FromRequestHeadersResult . Left $ UnprocessableValueError hdn
+        ABS.Partial _ -> error "Assertion failed: fromRequestHeaders: unexpected Partial returned by ABS.parse"
+        ABS.Done _ r  -> return r
 
 
 data RequestHeaderError =
     NoHeaderError (NE.NonEmpty HeaderName)
-  | EmptyRequestHeaderError
   | UnprocessableValueError HeaderName
   deriving (Eq, Show)
 

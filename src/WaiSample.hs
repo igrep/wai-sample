@@ -188,8 +188,16 @@ instance ToRequestHeaders ApiVersion where
   toRequestHeaders (ApiVersion i) = [("X-API-VERSION", BS.pack (show i))]
 
 instance FromRequestHeaders ApiVersion where
-  -- TODO: How to chain RequestHeaderError-s and Right-s?
-  fromRequestHeaders rhds = decode "X-API-VERSION" <|> decode "X-API-REVISION"
+  -- TODO: Rewrite using orHeader and decodeHeader
+  fromRequestHeaders rhds =
+    case decode "X-API-VERSION" of
+      Right v -> return v
+      Left (NoHeaderError hdns) ->
+        case decode "X-API-REVISION" of
+          Right v -> return v
+          other   -> other
+      Left (UnprocessableValueError hdn) ->
+        Left $ UnprocessableValueError hdn
    where
     decode hdn =
       case lookup hdn rhds of
