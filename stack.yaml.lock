@@ -3,7 +3,21 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: th-data-compat-0.1.3.0@sha256:7ea1c076b72075c0bfe613fa2a0240bf4ad5b7a3426bb3069327625d8ad188ba,3014
+    pantry-tree:
+      sha256: acd7af8d778a45a1a413f0b7239d511757a56a158de0cd52de4cb4f8fbcebc1e
+      size: 922
+  original:
+    hackage: th-data-compat-0.1.3.0
+- completed:
+    hackage: product-isomorphic-0.0.3.4@sha256:91be6bcf7db25d4a9129fe7a4624a48e1f94d0acad2505d25941b0ccd4e52497,2815
+    pantry-tree:
+      sha256: bd3964374e1b2715f43662d0299f67cb006b6070e70c2abeb5287e413c8f9f1d
+      size: 905
+  original:
+    hackage: product-isomorphic-0.0.3.4@sha256:91be6bcf7db25d4a9129fe7a4624a48e1f94d0acad2505d25941b0ccd4e52497,2815
 snapshots:
 - completed:
     sha256: 5921ddc75f5dd3f197fbc32e1e5676895a8e7b971d4f82ef6b556657801dd18a
