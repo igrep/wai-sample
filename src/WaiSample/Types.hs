@@ -19,11 +19,12 @@ module WaiSample.Types
   , EndpointOptions (..)
   , options
   , RequestInfo (..)
-  , RequestHeadersCodec (..)
   , ToRequestHeaders (..)
   , FromRequestHeaders (..)
+  , FromRequestHeadersResult (..)
   , RequestHeaderError (..)
-  , requestHeader
+  , decodeHeader
+  , orHeader
   , WithStatus (..)
   , module WaiSample.Types.ContentTypes
   , module WaiSample.Types.Response.Headers
@@ -111,15 +112,6 @@ options = EndpointOptions
 
 newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
 
-{-
-  data Hoge = Hoge
-    { a :: Int --> X-FOOBAR-HOGE-A
-    , b :: String --> X-FOOBAR-BAZ-B
-    }
-  -}
-
-data RequestHeadersCodec h where
-  RequestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeadersCodec h
 
 class ToRequestHeaders h where
   toRequestHeaders :: h -> RequestHeaders
@@ -131,7 +123,7 @@ class FromRequestHeaders h where
 newtype FromRequestHeadersResult h =
   FromRequestHeadersResult { unFromRequestHeadersResult :: Either RequestHeaderError h }
   deriving stock (Eq, Show)
-  deriving newtype (Functor, Applicative, Monad)
+  deriving newtype (Functor, Applicative)
 
 
 -- | Choose one from a couple of 'FromRequestHeadersResult's.
@@ -142,8 +134,8 @@ newtype FromRequestHeadersResult h =
 orHeader :: FromRequestHeadersResult h -> FromRequestHeadersResult h -> FromRequestHeadersResult h
 orHeader (FromRequestHeadersResult frhr1) (FromRequestHeadersResult frhr2) =
   case frhr1 of
-    Right v -> return v
-    Left (NoHeaderError hdns) -> FromRequestHeadersResult frhr2
+    Right v -> pure v
+    Left (NoHeaderError _hdns) -> FromRequestHeadersResult frhr2
     Left (UnprocessableValueError hdn) ->
       FromRequestHeadersResult . Left $ UnprocessableValueError hdn
 
@@ -157,17 +149,20 @@ decodeHeader hdn rhds =
       case ABS.parse (parseHeader <* ABS.endOfInput) v of
         ABS.Fail {}   -> FromRequestHeadersResult . Left $ UnprocessableValueError hdn
         ABS.Partial _ -> error "Assertion failed: fromRequestHeaders: unexpected Partial returned by ABS.parse"
-        ABS.Done _ r  -> return r
+        ABS.Done _ r  -> pure r
+
+
+instance ToRequestHeaders Void where
+  toRequestHeaders = const []
+
+instance FromRequestHeaders Void where
+  fromRequestHeaders = const (pure undefined)
 
 
 data RequestHeaderError =
     NoHeaderError (NE.NonEmpty HeaderName)
   | UnprocessableValueError HeaderName
   deriving (Eq, Show)
-
-
-requestHeader :: (ToHttpApiData h, FromHttpApiData h, Typeable h) => HeaderName -> RequestHeadersCodec h
-requestHeader = RequestHeader
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)

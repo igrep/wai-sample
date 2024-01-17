@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes        #-}
-{-# LANGUAGE ApplicativeDo              #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DeriveLift                 #-}
@@ -38,27 +37,31 @@ module WaiSample
   , printRoutes
   ) where
 
-import           Control.Applicative        ((<|>))
-import           Data.Aeson                 (FromJSON, ToJSON)
-import qualified Data.Aeson                 as Json
-import qualified Data.Attoparsec.ByteString as ABS
-import qualified Data.ByteString.Char8      as BS
-import           Data.Functor               (void)
-import           Data.List.NonEmpty         (NonEmpty ((:|)))
-import           Data.Proxy                 (Proxy (Proxy))
-import qualified Data.Text                  as T
-import qualified Data.Text.IO               as TIO
-import           Data.Time                  (fromGregorian)
-import           Data.Time.Clock            (UTCTime (UTCTime))
-import           Data.Typeable              (Typeable)
-import           GHC.Generics               (Generic)
-import           Language.Haskell.TH.Syntax (Lift)
-import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
-                                             methodPatch, methodPost, methodPut)
-import           Web.FormUrlEncoded         (FromForm, ToForm)
-import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData,
-                                             parseHeader)
+import           Control.Applicative                  ((<|>))
+import           Data.Aeson                           (FromJSON, ToJSON)
+import qualified Data.Aeson                           as Json
+import qualified Data.Attoparsec.ByteString           as ABS
+import qualified Data.ByteString.Char8                as BS
+import           Data.Functor                         (void)
+import           Data.List.NonEmpty                   (NonEmpty ((:|)))
+import           Data.Proxy                           (Proxy (Proxy))
+import qualified Data.Text                            as T
+import qualified Data.Text.IO                         as TIO
+import           Data.Time                            (fromGregorian)
+import           Data.Time.Clock                      (UTCTime (UTCTime))
+import           Data.Typeable                        (Typeable)
+import           GHC.Generics                         (Generic)
+import           Language.Haskell.TH.Syntax           (Lift)
+import           Network.HTTP.Types.Method            (Method, methodDelete,
+                                                       methodGet, methodPatch,
+                                                       methodPost, methodPut)
+import           Web.FormUrlEncoded                   (FromForm, ToForm)
+import           Web.HttpApiData                      (FromHttpApiData,
+                                                       ToHttpApiData,
+                                                       parseHeader)
 
+import           Data.Functor.ProductIsomorphic       ((|*|))
+import           Data.Functor.ProductIsomorphic.Class ((|$|))
 import           WaiSample.Routes
 import           WaiSample.Types
 
@@ -103,12 +106,8 @@ sampleRoutes =
           else return . sumLift $ "Customer " <> T.pack (show i))
   , get @(PlainText, T.Text)
       "customerTransaction"
-      ( do
-          path "customer/"
-          cId <- decimalPiece
-          path "/transaction/"
-          transactionName <- paramPiece
-          pure (cId, transactionName)
+      ( (,) |$| (path "customer/" *| decimalPiece)
+            |*| (path "/transaction/" *| paramPiece)
         )
       (\(cId, transactionName) ->
         return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
@@ -188,26 +187,8 @@ instance ToRequestHeaders ApiVersion where
   toRequestHeaders (ApiVersion i) = [("X-API-VERSION", BS.pack (show i))]
 
 instance FromRequestHeaders ApiVersion where
-  -- TODO: Rewrite using orHeader and decodeHeader
   fromRequestHeaders rhds =
-    case decode "X-API-VERSION" of
-      Right v -> return v
-      Left (NoHeaderError hdns) ->
-        case decode "X-API-REVISION" of
-          Right v -> return v
-          other   -> other
-      Left (UnprocessableValueError hdn) ->
-        Left $ UnprocessableValueError hdn
-   where
-    decode hdn =
-      case lookup hdn rhds of
-        Nothing ->
-          Left $ NoHeaderError $ hdn :| []
-        Just v  ->
-          case ABS.parse (parseHeader <* ABS.endOfInput) v of
-              ABS.Fail {}   -> Left $ UnprocessableValueError hdn
-              ABS.Partial _ -> error "Assertion failed: fromRequestHeaders: unexpected Partial returned by ABS.parse"
-              ABS.Done _ r  -> Right r
+    decodeHeader "X-API-VERSION" rhds `orHeader` decodeHeader "X-API-REVISION" rhds
 
 
 newtype SampleError = SampleError
@@ -225,10 +206,10 @@ instance FromForm SampleError
 
 
 showRoutes :: [Handler] -> T.Text
-showRoutes = ("/" <>) . T.intercalate "\n/" . map (showRoutes' . extractRoutingTable)
-
-extractRoutingTable :: Handler -> Route ()
-extractRoutingTable (Handler _resSpec _name _method tbl _opts _hdl) = void tbl
+showRoutes = ("/" <>) . T.intercalate "\n/" . map f
+ where
+  f :: Handler -> T.Text
+  f (Handler _resSpec _name _method tbl _opts _hdl) = showRoutes' tbl
 
 
 handler
