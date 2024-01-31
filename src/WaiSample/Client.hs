@@ -54,9 +54,8 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         (_responder :: Responder a h resObj)
     ) = do
     let hdArg = mkName "reqHds"
-        hdC = requestHeadersCodec @h
-        hd = headerBuilderFromHeaderCodec hdArg hdC
-        hasReqHdArg = hasRequestHeadersArgument hdC
+        hd = headerBuilderFromType @h hdArg
+        hasReqHdArg = not (isVoid @h)
 
     let funName = mkName $ makeUpName handlerName
         typeQResSpec = liftTypeQ @resSpec
@@ -176,27 +175,14 @@ pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
         return arg0
 
 
-headerBuilderFromHeaderCodec :: forall h. Name -> RequestHeadersCodec h -> ExpQ
-headerBuilderFromHeaderCodec qn = f [| $(varE qn) |]
- where
-  -- b :: RequestHeaders
-  f :: ExpQ -> RequestHeadersCodec i -> ExpQ
-  f expq (RequestHeader hn)         = [| [($(liftCIBS hn), toHeader $(expq))] |]
-  f _expq EmptyRequestHeader        = [| [] |]
-  -- TODO: I'm not really sure ignoring f here is correct. Test it.
-  f expq (FmapRequestHeader _f vrh) = f expq vrh
-  f _expq (PureRequestHeader _v)    = [| [] |]
-  f expq (ApRequestHeader frh vrh)  = [| $(f expq frh) ++ $(f expq vrh) |]
-  f expq (AltRequestHeader arh brh) = [| $(f expq arh) ++ $(f expq brh) |]
+headerBuilderFromType :: ToRequestHeaders h => Name -> ExpQ
+headerBuilderFromType =
+  todo
 
 
-hasRequestHeadersArgument :: RequestHeadersCodec h -> Bool
-hasRequestHeadersArgument (RequestHeader _hn)        = True
-hasRequestHeadersArgument EmptyRequestHeader         = False
-hasRequestHeadersArgument (FmapRequestHeader _f vrh) = hasRequestHeadersArgument vrh
-hasRequestHeadersArgument (PureRequestHeader _v)     = False
-hasRequestHeadersArgument (ApRequestHeader frh vrh)  = hasRequestHeadersArgument frh || hasRequestHeadersArgument vrh
-hasRequestHeadersArgument (AltRequestHeader arh brh) = hasRequestHeadersArgument arh || hasRequestHeadersArgument brh
+isVoid :: ToRequestHeaders h => Bool
+isVoid =
+  todo
 
 
 typeToNameQ :: forall t. Typeable t => Q Name

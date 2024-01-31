@@ -22,7 +22,6 @@ common common
     , http-types
     , http-client
     , mtl
-    , product-isomorphic > 0.0.2.0
     , text
     , time
     , wai

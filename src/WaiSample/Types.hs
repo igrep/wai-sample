@@ -34,9 +34,6 @@ module WaiSample.Types
   ) where
 
 import qualified Data.Attoparsec.ByteString       as ABS
-import           Data.Functor.ProductIsomorphic   (ProductIsoApplicative,
-                                                   ProductIsoFunctor, pureP,
-                                                   (|$|), (|*|))
 import qualified Data.List.NonEmpty               as NE
 import           Data.Proxy                       (Proxy (Proxy))
 import qualified Data.Text                        as T
@@ -60,19 +57,19 @@ data Route a where
   LiteralPath :: T.Text -> Route T.Text
 
   -- TODO: Rename into FmapRoute, PureRoute and ApRoute.
-  -- | '|$|'
+  -- | '<$>'
   FmapPath :: (a -> b) -> Route a -> Route b
   PurePath :: a -> Route a
-  -- | '|*|'
+  -- | '<*>'
   ApPath :: Route (a -> b) -> Route a -> Route b
   ParsedPath :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => Route a
 
-instance ProductIsoFunctor Route where
-  (|$|) = FmapPath
+instance Functor Route where
+  fmap = FmapPath
 
-instance ProductIsoApplicative Route where
-  pureP = PurePath
-  (|*|) = ApPath
+instance Applicative Route where
+  pure = PurePath
+  (<*>) = ApPath
 
 data Handler where
   Handler
@@ -150,6 +147,13 @@ decodeHeader hdn rhds =
         ABS.Fail {}   -> FromRequestHeadersResult . Left $ UnprocessableValueError hdn
         ABS.Partial _ -> error "Assertion failed: fromRequestHeaders: unexpected Partial returned by ABS.parse"
         ABS.Done _ r  -> pure r
+
+
+instance ToRequestHeaders a => ToRequestHeaders (Maybe a) where
+  toRequestHeaders = maybe [] toRequestHeaders
+
+instance FromRequestHeaders a => FromRequestHeaders (Maybe a) where
+  fromRequestHeaders hds = (Just <$> fromRequestHeaders hds) `orHeader` pure Nothing
 
 
 instance ToRequestHeaders Void where

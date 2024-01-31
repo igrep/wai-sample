@@ -6,33 +6,29 @@
 module WaiSample.Server where
 
 
-import           Control.Error.Util               (hush)
-import           Control.Exception                (bracket_)
-import           Data.Attoparsec.ByteString.Char8 (parseOnly)
-import qualified Data.Attoparsec.Text             as AT
-import           Data.ByteString.Lazy             (fromStrict)
-import           Data.CaseInsensitive             (original)
-import           Data.Data                        (Proxy)
-import qualified Data.List                        as L
-import           Data.List.NonEmpty               (NonEmpty ((:|)))
-import qualified Data.List.NonEmpty               as NE
-import           Data.Maybe                       (fromMaybe, listToMaybe,
-                                                   mapMaybe)
-import qualified Data.Text                        as T
-import           Network.HTTP.Media               (matchAccept)
-import           Network.HTTP.Types.Header        (HeaderName, hContentType)
-import qualified Network.HTTP.Types.Status        as HTS
-import           Network.Wai                      (Application,
-                                                   Request (requestHeaders, requestMethod),
-                                                   pathInfo, responseLBS)
-import qualified Network.Wai                      as Wai
-import           Network.Wai.Handler.Warp         (runEnv)
-import           System.IO                        (hPutStrLn, stderr)
-import           Web.HttpApiData                  (parseHeader, parseUrlPiece)
+import           Control.Error.Util         (hush)
+import           Control.Exception          (bracket_)
+import qualified Data.Attoparsec.Text       as AT
+import           Data.ByteString.Lazy       (fromStrict)
+import           Data.CaseInsensitive       (original)
+import           Data.Data                  (Proxy)
+import qualified Data.List                  as L
+import           Data.List.NonEmpty         (NonEmpty ((:|)))
+import           Data.Maybe                 (fromMaybe, listToMaybe, mapMaybe)
+import qualified Data.Text                  as T
+import           Network.HTTP.Media         (matchAccept)
+import           Network.HTTP.Types.Header  (hContentType)
+import qualified Network.HTTP.Types.Status  as HTS
+import           Network.Wai                (Application,
+                                             Request (requestHeaders, requestMethod),
+                                             pathInfo, responseLBS)
+import qualified Network.Wai                as Wai
+import           Network.Wai.Handler.Warp   (runEnv)
+import           Web.HttpApiData            (parseUrlPiece)
 
-import qualified Data.ByteString.Lazy.Char8       as BSL
+import qualified Data.ByteString.Lazy.Char8 as BSL
 import           WaiSample
-import           WaiSample.Internal               (defaultStatusCodeOf)
+import           WaiSample.Internal         (defaultStatusCodeOf)
 
 
 sampleApp :: Application
@@ -69,10 +65,7 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOpti
                       [(hContentType, "text/plain;charset=UTF-8")]
                       ("422 Unprocessable Entity: " <> msg)
 
-                  hdCodec :: RequestHeadersCodec h
-                  hdCodec = requestHeadersCodec
-
-              case parseRequestHeaders hdCodec req of
+              case unFromRequestHeadersResult $ fromRequestHeaders (requestHeaders req) of
                   Right reqHdObj -> do
                     resObj <- respond x (RequestInfo reqHdObj)
                     rawRes <- toRawResponse @resSpec mime resObj
@@ -86,23 +79,6 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOpti
                     if null others
                       then return422 $ "request header \"" <> fromStrict (original name) <> "\" is not specified."
                       else return422 $ "Missing request header (one of " <> BSL.pack (show (name : others)) <> ")"
-                  Left EmptyRequestHeaderError ->
-                    case hdCodec of
-                      EmptyRequestHeader -> do
-                        -- TODO: Refactor
-                        resObj <- respond x (RequestInfo (error "Referring to a void request header value"))
-                        rawRes <- toRawResponse @resSpec mime resObj
-                        let mst = rawStatusCode rawRes
-                            stC =
-                              case mst of
-                                  NonDefaultStatus st -> st
-                                  DefaultStatus       -> defaultStatusCodeOf method
-                        return . responseLBS stC (rawHeaders rawRes) $ rawBody rawRes
-                      _ -> do
-                        -- FIXME!
-                        -- TODO: use logger
-                        hPutStrLn stderr "[BUG] A product type containing a Void is not currently supported."
-                        return422 "Invalid request headers"
                   Left (UnprocessableValueError name) ->
                     return422 $ "request header \"" <> fromStrict (original name) <> "\" is invalid."
             Nothing ->
@@ -123,36 +99,3 @@ parserFromRoutingTable ParsedPath = parseUrlPiece
 runRoutingTable :: Route a -> Request -> Maybe a
 runRoutingTable tbl =
   hush . AT.parseOnly (parserFromRoutingTable tbl <* AT.endOfInput) . T.intercalate "/" . pathInfo
-
-
-parseRequestHeaders :: RequestHeadersCodec h -> Request -> Either RequestHeaderError h
-parseRequestHeaders rhp req = run rhp []
- where
-  run :: forall h1. RequestHeadersCodec h1 -> [HeaderName] -> Either RequestHeaderError h1
-  run (RequestHeader name) notFounds = do
-    hdv <-
-      case lookup name hds of
-        Nothing    -> Left . NoHeaderError $ name :| notFounds
-        Just found -> return found
-    either (const (Left $ UnprocessableValueError name)) return $
-      parseOnly parseHeader hdv
-  -- TODO: Test with a record including Void. For example:
-  --       (Int, Void)
-  --       (Void, Int)
-  --       newtype NewVoid = NewVoid Void
-  --       Either Void Int
-  --       Either Int Void
-  run EmptyRequestHeader  notFounds          =
-    case notFounds of
-      []        -> Left EmptyRequestHeaderError
-      n : names -> Left $ NoHeaderError (n :| names)
-  run (FmapRequestHeader f rhpA) notFounds   = f <$> run rhpA notFounds
-  run (PureRequestHeader x)  _notFounds      = pure x
-  run (ApRequestHeader rhpF rhpA) notFounds  = run rhpF notFounds          <*> run rhpA notFounds
-  run (AltRequestHeader rhpA rhpB) notFounds =
-    case run rhpA notFounds of
-      Right a                                -> pure a
-      Left (NoHeaderError names)             -> run rhpB $ notFounds ++ NE.toList names
-      Left EmptyRequestHeaderError           -> run rhpB notFounds
-      Left e@(UnprocessableValueError _name) -> Left e
-  hds = requestHeaders req
