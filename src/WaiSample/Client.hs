@@ -83,7 +83,6 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
               let uri = URI.encode $(p)
                   rawReqHds :: RequestHeaders
                   rawReqHds = $(hd)
-              print rawReqHds
               res <- $(varE bd) $(liftByteString meth) uri rawReqHds
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypeFromServer = lookup headerName $ responseHeaders res
