@@ -9,7 +9,7 @@ import           Control.Monad.IO.Class    (liftIO)
 import           Control.Monad.Reader      (ReaderT, mapReaderT)
 import           Control.Monad.State.Lazy  (evalStateT)
 import qualified Data.Aeson                as A
-import           Data.ByteString.Char8     ()
+import qualified Data.ByteString.Char8     as BS
 import qualified Data.ByteString.Lazy      as BSL
 import qualified Data.Text                 as T
 import qualified Data.Text.Encoding        as TE
@@ -18,13 +18,16 @@ import           Network.HTTP.Types        (Header, ResponseHeaders, methodGet,
                                             methodPost)
 import qualified Network.Wai               as Wai
 import qualified Network.Wai.Internal      as WaiI
-import           Network.Wai.Test          (SResponse (SResponse, simpleHeaders),
+import           Network.Wai.Test          (SResponse (SResponse, simpleBody, simpleHeaders),
                                             Session, assertBody, assertHeader,
                                             assertStatus, defaultRequest,
                                             request, setPath)
 import           Network.Wai.Test.Internal (initState)
 import           Test.Syd                  (Spec, around, describe, it,
-                                            shouldMatchList)
+                                            shouldBe, shouldMatchList)
+import           Web.FormUrlEncoded        (urlDecodeAsForm)
+
+import           WaiSample                 (Customer (Customer, customerApiVersion, customerId, customerName))
 import           WaiSample.Server          (sampleApp)
 
 
@@ -81,14 +84,20 @@ spec =
       assertHeader "Content-Type" "application/json" res
 
     it "GET /customer/:customerId returns application/x-www-form-urlencoded given application/x-www-form-urlencoded as the Accept header" . runStateTClientState $ do
-      let cId = "1752"
+      let cId = 1752
+          cIdS = show cId
           req = defaultRequest
-                  `setPath` ("/customer/" <> BSL.toStrict cId)
+                  `setPath` ("/customer/" <> BS.pack cIdS)
                   `addHeader` ("Accept", "application/x-www-form-urlencoded")
       res <- request req
       assertStatus 200 res
-      let expectedBody = "customerId=" <> cId <> "&customerName=Mr.%20" <> cId
-      assertBody expectedBody res
+      -- Compare the expected body with the actual body after decoding the latter
+      let expectedCustomer = Customer
+            { customerId = cId
+            , customerName = "Mr. " <> T.pack cIdS
+            , customerApiVersion = Nothing
+            }
+      urlDecodeAsForm (simpleBody res) `shouldBe` Right expectedCustomer
       assertHeader "Content-Type" "application/x-www-form-urlencoded" res
 
     it "GET /customer/:customerId returns 406 given an unknown Accept header" . runStateTClientState $ do
