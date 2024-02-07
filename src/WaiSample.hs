@@ -37,31 +37,22 @@ module WaiSample
   , printRoutes
   ) where
 
-import           Control.Applicative                  ((<|>))
-import           Data.Aeson                           (FromJSON, ToJSON)
-import qualified Data.Aeson                           as Json
-import qualified Data.Attoparsec.ByteString           as ABS
-import qualified Data.ByteString.Char8                as BS
-import           Data.Functor                         (void)
-import           Data.List.NonEmpty                   (NonEmpty ((:|)))
-import           Data.Proxy                           (Proxy (Proxy))
-import qualified Data.Text                            as T
-import qualified Data.Text.IO                         as TIO
-import           Data.Time                            (fromGregorian)
-import           Data.Time.Clock                      (UTCTime (UTCTime))
-import           Data.Typeable                        (Typeable)
-import           GHC.Generics                         (Generic)
-import           Language.Haskell.TH.Syntax           (Lift)
-import           Network.HTTP.Types.Method            (Method, methodDelete,
-                                                       methodGet, methodPatch,
-                                                       methodPost, methodPut)
-import           Web.FormUrlEncoded                   (FromForm, ToForm)
-import           Web.HttpApiData                      (FromHttpApiData,
-                                                       ToHttpApiData,
-                                                       parseHeader)
+import           Data.Aeson                 (FromJSON, ToJSON)
+import qualified Data.Aeson                 as Json
+import qualified Data.ByteString.Char8      as BS
+import           Data.Proxy                 (Proxy (Proxy))
+import qualified Data.Text                  as T
+import qualified Data.Text.IO               as TIO
+import           Data.Time                  (fromGregorian)
+import           Data.Time.Clock            (UTCTime (UTCTime))
+import           Data.Typeable              (Typeable)
+import           GHC.Generics               (Generic)
+import           Language.Haskell.TH.Syntax (Lift)
+import           Network.HTTP.Types.Method  (Method, methodDelete, methodGet,
+                                             methodPatch, methodPost, methodPut)
+import           Web.FormUrlEncoded         (FromForm, ToForm)
+import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData)
 
-import           Data.Functor.ProductIsomorphic       ((|*|))
-import           Data.Functor.ProductIsomorphic.Class ((|$|))
 import           WaiSample.Routes
 import           WaiSample.Types
 
@@ -106,8 +97,8 @@ sampleRoutes =
           else return . sumLift $ "Customer " <> T.pack (show i))
   , get @(PlainText, T.Text)
       "customerTransaction"
-      ( (,) |$| (path "customer/" *| decimalPiece)
-            |*| (path "/transaction/" *| paramPiece)
+      ( (,) <$> (path "customer/" *> decimalPiece)
+            <*> (path "/transaction/" *> paramPiece)
         )
       (\(cId, transactionName) ->
         return $ "Customer " <> T.pack (show cId) <> " Transaction " <> transactionName
