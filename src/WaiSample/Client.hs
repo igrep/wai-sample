@@ -20,6 +20,7 @@ import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import           Data.Typeable              (Typeable, tyConName, typeRep,
                                              typeRepTyCon)
+import           Data.Void                  (Void)
 import           Language.Haskell.TH        (Code (examineCode), DecsQ, ExpQ, Q,
                                              TypeQ, appT, appTypeE, clause,
                                              funD, mkName, newName, normalB,
@@ -35,9 +36,10 @@ import           Network.HTTP.Media         (parseAccept)
 import           Network.HTTP.Types         (Method, RequestHeaders)
 import qualified Network.URI.Encode         as URI
 import           Safe                       (headNote)
+import           Web.HttpApiData            (toUrlPiece)
+
 import           WaiSample
 import           WaiSample.Internal
-import           Web.HttpApiData            (toHeader, toUrlPiece)
 
 
 declareClient :: String -> [Handler] -> DecsQ
@@ -54,8 +56,11 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         (_responder :: Responder a h resObj)
     ) = do
     let hdArg = mkName "reqHds"
-        hd = headerBuilderFromType @h hdArg
         hasReqHdArg = not (isVoid @h)
+        hd =
+          if hasReqHdArg
+            then [e| toRequestHeaders $(varE hdArg) |]
+            else [e| [] |]
 
     let funName = mkName $ makeUpName handlerName
         typeQResSpec = liftTypeQ @resSpec
@@ -174,14 +179,9 @@ pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
         return arg0
 
 
-headerBuilderFromType :: ToRequestHeaders h => Name -> ExpQ
-headerBuilderFromType =
-  todo
-
-
-isVoid :: ToRequestHeaders h => Bool
+isVoid :: forall h. (ToRequestHeaders h, Typeable h) => Bool
 isVoid =
-  todo
+  typeRep (Proxy :: Proxy h) == typeRep (Proxy :: Proxy Void)
 
 
 typeToNameQ :: forall t. Typeable t => Q Name
@@ -204,10 +204,6 @@ infixr 1 `funcT`
 
 liftByteString :: B.ByteString -> ExpQ
 liftByteString bs = [| B.pack $(stringE $ B.unpack bs) |]
-
-
-liftCIBS :: CI.CI B.ByteString -> ExpQ
-liftCIBS cibs = [| CI.mk $(liftByteString $ CI.foldedCase cibs) |]
 
 
 type Backend = Method -> String -> RequestHeaders -> IO (HC.Response BL.ByteString)
