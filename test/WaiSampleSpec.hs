@@ -91,13 +91,12 @@ spec =
                   `addHeader` ("Accept", "application/x-www-form-urlencoded")
       res <- request req
       assertStatus 200 res
-      -- Compare the expected body with the actual body after decoding the latter
       let expectedCustomer = Customer
             { customerId = cId
             , customerName = "Mr. " <> T.pack cIdS
             , customerApiVersion = Nothing
             }
-      urlDecodeAsForm (simpleBody res) `shouldBe` Right expectedCustomer
+      liftIO $ urlDecodeAsForm (simpleBody res) `shouldBe` Right expectedCustomer
       assertHeader "Content-Type" "application/x-www-form-urlencoded" res
 
     it "GET /customer/:customerId returns 406 given an unknown Accept header" . runStateTClientState $ do
