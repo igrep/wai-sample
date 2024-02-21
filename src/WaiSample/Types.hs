@@ -129,10 +129,15 @@ newtype FromRequestHeadersResult h =
 --   * If the first argument is 'UnprocessableValueError', where the header value is invalid,
 --     it immediately returns as an error instead of the second argument.
 orHeader :: FromRequestHeadersResult h -> FromRequestHeadersResult h -> FromRequestHeadersResult h
-orHeader (FromRequestHeadersResult frhr1) (FromRequestHeadersResult frhr2) =
-  case frhr1 of
+orHeader (FromRequestHeadersResult eh1) frhr2@(FromRequestHeadersResult eh2) =
+  case eh1 of
     Right v -> pure v
-    Left (NoHeaderError _hdns) -> FromRequestHeadersResult frhr2
+    Left (NoHeaderError hdns1) ->
+      case eh2 of
+        Right _ -> frhr2
+        Left (NoHeaderError hdns2) ->
+          FromRequestHeadersResult . Left $ NoHeaderError (hdns1 <> hdns2)
+        Left (UnprocessableValueError _hdn) -> frhr2
     Left (UnprocessableValueError hdn) ->
       FromRequestHeadersResult . Left $ UnprocessableValueError hdn
 
@@ -143,10 +148,9 @@ decodeHeader hdn rhds =
     Nothing ->
       FromRequestHeadersResult . Left . NoHeaderError $ hdn NE.:| []
     Just v  ->
-      case ABS.parse (parseHeader <* ABS.endOfInput) v of
-        ABS.Fail {}   -> FromRequestHeadersResult . Left $ UnprocessableValueError hdn
-        ABS.Partial _ -> error "Assertion failed: fromRequestHeaders: unexpected Partial returned by ABS.parse"
-        ABS.Done _ r  -> pure r
+      case ABS.parseOnly (parseHeader <* ABS.endOfInput) v of
+        Left _err -> FromRequestHeadersResult . Left $ UnprocessableValueError hdn
+        Right r   -> pure r
 
 
 instance ToRequestHeaders a => ToRequestHeaders (Maybe a) where
