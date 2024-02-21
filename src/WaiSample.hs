@@ -71,10 +71,11 @@ sampleRoutes =
       "customerId"
       (path "customer/" *> decimalPiece)
       (return . customerOfId Nothing)
+
   , getWith @(Sum '[(Json, Customer), (WithStatus Status503 Json, SampleError)])
       "customerIdJson"
       -- /customer/:id.json
-      (path "customer/" *> (decimalPiece <* path ".json"))
+      (path "customer/" *> decimalPiece <* path ".json")
       options
       { headersType = Proxy :: Proxy (Maybe ApiVersion)
       }
@@ -84,6 +85,7 @@ sampleRoutes =
           then return . sumLift $ SampleError "Invalid Customer"
           else return . sumLift $ customerOfId apiVersion i
         )
+
   , get @(Sum '[(PlainText, T.Text), Response (WithStatus Status503 PlainText) T.Text])
       "customerIdTxt"
       -- /customer/:id.txt
