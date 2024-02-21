@@ -83,6 +83,60 @@ spec =
       assertBody expectedBody res
       assertHeader "Content-Type" "application/json" res
 
+    it "GET /customer/:customerId.json returns a customer with the value of X-API-VERSION request header" . runStateTClientState $ do
+      let cId = "221"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".json")
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-VERSION", "3")
+      res <- request req
+      assertStatus 200 res
+      let expectedBody =
+            "{\"customerName\":\"Mr. " <> cId <> "\","
+              <> "\"customerId\":"
+              <> cId
+              <> ",\"customerApiVersion\":3}"
+      assertBody expectedBody res
+      assertHeader "Content-Type" "application/json" res
+
+    it "GET /customer/:customerId.json returns an 422 error given an invalid value of X-API-VERSION request header" . runStateTClientState $ do
+      let cId = "221"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".json")
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-VERSION", "invalid")
+      res <- request req
+      assertStatus 422 res
+      let expectedBody = "422 Unprocessable Entity: request header \"X-API-VERSION\" is invalid."
+      assertBody expectedBody res
+
+    it "GET /customer/:customerId.json returns a customer with the value of X-API-REVISION request header" . runStateTClientState $ do
+      let cId = "222"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".json")
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-REVISION", "7")
+      res <- request req
+      assertStatus 200 res
+      let expectedBody =
+            "{\"customerName\":\"Mr. " <> cId <> "\","
+              <> "\"customerId\":"
+              <> cId
+              <> ",\"customerApiVersion\":7}"
+      assertBody expectedBody res
+      assertHeader "Content-Type" "application/json" res
+
+    it "GET /customer/:customerId.json returns an 422 error given an invalid value of X-API-REVISION request header" . runStateTClientState $ do
+      let cId = "223"
+          req = defaultRequest
+                  `setPath` ("/customer/" <> BSL.toStrict cId <> ".json")
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-REVISION", "invalid")
+      res <- request req
+      assertStatus 422 res
+      let expectedBody = "422 Unprocessable Entity: request header \"X-API-REVISION\" is invalid."
+      assertBody expectedBody res
+
     it "GET /customer/:customerId returns application/x-www-form-urlencoded given application/x-www-form-urlencoded as the Accept header" . runStateTClientState $ do
       let cId = 1752
           cIdS = show cId
