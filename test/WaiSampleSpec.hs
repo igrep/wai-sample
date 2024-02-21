@@ -305,6 +305,17 @@ spec =
       assertBody "405 Method not allowed." res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
+    -- TODO: Add normal tests for POST /echoApiVersion
+    it "POST /echoApiVersion returns an 422 error given neither X-API-VERSION nor X-API-REVISION request header" . runStateTClientState $ do
+      let req = defaultRequest
+                  { WaiI.requestMethod = methodPost }
+                  `setPath` ("/echoApiVersion/")
+                  `addHeader` ("Accept", "*/*")
+      res <- request req
+      assertStatus 422 res
+      let expectedBody = "422 Unprocessable Entity: Missing request header (one of [\"X-API-VERSION\", \"X-API-REVISION\"])"
+      assertBody expectedBody res
+
 
 assertHeaders :: HasCallStack => ResponseHeaders -> SResponse -> Session ()
 assertHeaders expectedHeaders SResponse { simpleHeaders } =

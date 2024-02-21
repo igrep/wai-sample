@@ -144,6 +144,15 @@ sampleRoutes =
               . headered @"X-RateLimit-Reset" time
               $ "Customer " <> T.pack (show i)
               )
+
+  , postWith @(Json, ApiVersion)
+      "echoApiVersion"
+      -- /echoApiVersion
+      (path "echoApiVersion/")
+      options
+      { headersType = Proxy :: Proxy ApiVersion
+      }
+      (\_ requestInfo -> return $ requestHeadersValue requestInfo)
   ]
  where
   customerOfId apiVersion i =
