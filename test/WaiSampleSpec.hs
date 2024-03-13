@@ -305,11 +305,32 @@ spec =
       assertBody "405 Method not allowed." res
       assertHeader "Content-Type" "text/plain;charset=UTF-8" res
 
-    -- TODO: Add normal tests for POST /echoApiVersion
+    it "POST /echoApiVersion returns the value of X-API-VERSION request header" . runStateTClientState $ do
+      let req = defaultRequest
+                  { WaiI.requestMethod = methodPost }
+                  `setPath` "/echoApiVersion/"
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-VERSION", BSL.toStrict expectedBody)
+          expectedBody = "3333"
+      res <- request req
+      assertStatus 201 res
+      assertBody expectedBody res
+
+    it "POST /echoApiVersion returns the value of X-API-REVISION request header" . runStateTClientState $ do
+      let req = defaultRequest
+                  { WaiI.requestMethod = methodPost }
+                  `setPath` "/echoApiVersion/"
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-REVISION", BSL.toStrict expectedBody)
+          expectedBody = "4444"
+      res <- request req
+      assertStatus 201 res
+      assertBody expectedBody res
+
     it "POST /echoApiVersion returns an 422 error given neither X-API-VERSION nor X-API-REVISION request header" . runStateTClientState $ do
       let req = defaultRequest
                   { WaiI.requestMethod = methodPost }
-                  `setPath` ("/echoApiVersion/")
+                  `setPath` "/echoApiVersion/"
                   `addHeader` ("Accept", "*/*")
       res <- request req
       assertStatus 422 res
