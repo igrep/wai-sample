@@ -334,7 +334,7 @@ spec =
                   `addHeader` ("Accept", "*/*")
       res <- request req
       assertStatus 422 res
-      let expectedBody = "422 Unprocessable Entity: Missing request header (one of [\"X-API-VERSION\", \"X-API-REVISION\"])"
+      let expectedBody = "422 Unprocessable Entity: Missing request header (one of [\"X-API-VERSION\",\"X-API-REVISION\"])"
       assertBody expectedBody res
 
 
