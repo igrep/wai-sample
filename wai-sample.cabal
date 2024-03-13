@@ -18,6 +18,7 @@ common common
   build-depends:
       base >=4.7 && <5
     , aeson >= 2.0
+    , deriveJsonNoPrefix
     , bytestring
     , http-types
     , http-client

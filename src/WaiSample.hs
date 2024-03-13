@@ -11,6 +11,7 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeApplications           #-}
 
 module WaiSample
@@ -39,6 +40,7 @@ module WaiSample
 
 import           Data.Aeson                 (FromJSON, ToJSON)
 import qualified Data.Aeson                 as Json
+import           Data.Aeson.DeriveNoPrefix  (deriveJsonNoTypeNamePrefix)
 import qualified Data.ByteString.Char8      as BS
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
@@ -153,6 +155,15 @@ sampleRoutes =
       { headersType = Proxy :: Proxy ApiVersion
       }
       (\_ requestInfo -> return $ requestHeadersValue requestInfo)
+
+  , getWith @(Json, ExampleRequestHeaders)
+      "getExampleRequestHeaders"
+      -- /exampleRequestHeaders
+      (path "exampleRequestHeaders/")
+      options
+      { headersType = Proxy :: Proxy ExampleRequestHeaders
+      }
+      (\_ requestInfo -> return $ requestHeadersValue requestInfo)
   ]
  where
   customerOfId apiVersion i =
@@ -177,6 +188,7 @@ instance FromJSON Customer
 instance ToForm Customer
 
 instance FromForm Customer
+
 
 newtype ApiVersion = ApiVersion Integer
   deriving stock (Eq, Generic, Show, Lift)
@@ -266,3 +278,22 @@ patchWith name  = handler @resSpec @a name methodPatch
 
 printRoutes :: IO ()
 printRoutes = TIO.putStrLn $ showRoutes sampleRoutes
+
+
+-- Put this at the end to avoid TemplateHaskell's stage restriction
+data ExampleRequestHeaders = ExampleRequestHeaders
+  { exampleRequestHeadersApiVersion :: ApiVersion
+  , exampleRequestHeadersApiKey     :: T.Text
+  } deriving stock (Eq, Generic, Show, Lift)
+
+instance ToRequestHeaders ExampleRequestHeaders where
+  toRequestHeaders (ExampleRequestHeaders apiVersion apiKey) =
+    toRequestHeaders apiVersion <> [("X-API-KEY", BS.pack (T.unpack apiKey))]
+
+instance FromRequestHeaders ExampleRequestHeaders where
+  fromRequestHeaders rhds =
+    ExampleRequestHeaders
+      <$> fromRequestHeaders rhds
+      <*> decodeHeader "X-API-KEY" rhds
+
+$(deriveJsonNoTypeNamePrefix ''ExampleRequestHeaders)
