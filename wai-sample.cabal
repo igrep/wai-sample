@@ -37,8 +37,10 @@ library
   import: common
   exposed-modules:
       WaiSample
+      WaiSample.Sample
       WaiSample.Types
       WaiSample.Server
+      WaiSample.Server.Sample
       WaiSample.Client
       WaiSample.Client.Sample
   other-modules:

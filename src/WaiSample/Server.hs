@@ -23,20 +23,11 @@ import           Network.Wai                (Application,
                                              Request (requestHeaders, requestMethod),
                                              pathInfo, responseLBS)
 import qualified Network.Wai                as Wai
-import           Network.Wai.Handler.Warp   (runEnv)
 import           Web.HttpApiData            (parseUrlPiece)
 
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import           WaiSample
 import           WaiSample.Internal         (defaultStatusCodeOf)
-
-
-sampleApp :: Application
-sampleApp = handles sampleRoutes
-
-
-runSampleApp :: IO ()
-runSampleApp = runEnv 8020 sampleApp
 
 
 handles :: [Handler] -> Application

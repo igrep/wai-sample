@@ -17,13 +17,14 @@ import           Test.QuickCheck          (property)
 import           Test.Syd                 (Spec, aroundAll, describe,
                                            itWithOuter, shouldReturn)
 
-import           WaiSample                (ContentTypes, Customer (..), Json,
-                                           PlainText, Response (Response),
-                                           SampleError (SampleError), Status503,
+import           WaiSample                (ContentTypes, Json, PlainText,
+                                           Response (Response), Status503,
                                            WithStatus, headered, sumLift)
 import           WaiSample.Client         (httpClientBackend)
 import           WaiSample.Client.Sample
-import           WaiSample.Server         (sampleApp)
+import           WaiSample.Sample         (Customer (..),
+                                           SampleError (SampleError))
+import           WaiSample.Server.Sample  (sampleApp)
 
 
 spec :: Spec

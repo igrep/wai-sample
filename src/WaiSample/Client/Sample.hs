@@ -4,8 +4,8 @@
 
 module WaiSample.Client.Sample where
 
-import           WaiSample
 import           WaiSample.Client
+import           WaiSample.Sample
 
 
 $(declareClient "sample" sampleRoutes)

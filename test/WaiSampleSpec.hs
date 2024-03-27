@@ -27,8 +27,8 @@ import           Test.Syd                  (Spec, around, describe, it,
                                             shouldBe, shouldMatchList)
 import           Web.FormUrlEncoded        (urlDecodeAsForm)
 
-import           WaiSample                 (Customer (Customer, customerApiVersion, customerId, customerName))
-import           WaiSample.Server          (sampleApp)
+import           WaiSample.Sample          (Customer (Customer, customerApiVersion, customerId, customerName))
+import           WaiSample.Server.Sample   (sampleApp)
 
 
 spec :: Spec
