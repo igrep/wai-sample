@@ -27,7 +27,7 @@ import           Test.Syd                  (Spec, around, describe, it,
                                             shouldBe, shouldMatchList)
 import           Web.FormUrlEncoded        (urlDecodeAsForm)
 
-import           WaiSample.Sample          (Customer (Customer, customerApiVersion, customerId, customerName))
+import           WaiSample.Sample
 import           WaiSample.Server.Sample   (sampleApp)
 
 
@@ -336,6 +336,26 @@ spec =
       assertStatus 422 res
       let expectedBody = "422 Unprocessable Entity: Missing request header (one of [\"X-API-VERSION\",\"X-API-REVISION\"])"
       assertBody expectedBody res
+
+    it "GET /exampleRequestHeaders returns the value of X-API-VERSION and X-API-KEY request headers" . runStateTClientState $ do
+      let req = defaultRequest
+                  `setPath` "/exampleRequestHeaders/"
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-VERSION", BSL.toStrict expectedVersion)
+                  `addHeader` ("X-API-KEY", BSL.toStrict expectedKey)
+          expectedVersion = "3333"
+          expectedKey = "key"
+          expectedBody = ExampleRequestHeaders
+            { exampleRequestHeadersApiVersion = expectedVersion
+            , exampleRequestHeadersApiKey = expectedKey
+            }
+
+      res <- request req
+      assertStatus 200 res
+      let expectedHeaders = [("Content-Type", "application/json")]
+
+      assertHeaders expectedHeaders res
+      liftIO $ A.decode (simpleBody res) `shouldBe` Just expectedBody
 
 
 assertHeaders :: HasCallStack => ResponseHeaders -> SResponse -> Session ()

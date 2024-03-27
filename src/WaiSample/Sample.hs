@@ -7,14 +7,7 @@
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeApplications           #-}
 
-module WaiSample.Sample
-  ( sampleRoutes
-  , printRoutes
-
-  , Customer(..)
-  , ApiVersion(..)
-  , SampleError(..)
-  ) where
+module WaiSample.Sample where
 
 import           Data.Aeson                 (FromJSON, ToJSON, toEncoding)
 import qualified Data.Aeson                 as Json
