@@ -68,7 +68,7 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOpti
                     return . responseLBS stC (rawHeaders rawRes) $ rawBody rawRes
                   Left (NoHeaderError (name :| others)) ->
                     if null others
-                      then return422 $ "request header \"" <> fromStrict (original name) <> "\" is not specified."
+                      then return422 $ "Missing request header \"" <> fromStrict (original name) <> "\""
                       else return422 $ "Missing request header (one of " <> BSL.pack (show (name : others)) <> ")"
                   Left (UnprocessableValueError name) ->
                     return422 $ "request header \"" <> fromStrict (original name) <> "\" is invalid."
