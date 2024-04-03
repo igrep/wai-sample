@@ -22,7 +22,8 @@ import           WaiSample                (ContentTypes, Json, PlainText,
                                            WithStatus, headered, sumLift)
 import           WaiSample.Client         (httpClientBackend)
 import           WaiSample.Client.Sample
-import           WaiSample.Sample         (Customer (..),
+import           WaiSample.Sample         (ApiVersion (..), Customer (..),
+                                           ExampleRequestHeaders (..),
                                            SampleError (SampleError))
 import           WaiSample.Server.Sample  (sampleApp)
 
@@ -37,7 +38,7 @@ spec =
         let backend = buildBackend port manager
         sampleIndex backend `shouldReturn` "index"
 
-      itWithOuter "sampleMaintenance returns \"Sorry, we are under maintenance\"" $ \(manager, port) -> do
+      itWithOuter "maintenance returns \"Sorry, we are under maintenance\"" $ \(manager, port) -> do
         let backend = buildBackend port manager
         sampleMaintenance backend `shouldReturn` "Sorry, we are under maintenance"
 
@@ -73,6 +74,16 @@ spec =
                 , customerApiVersion = Nothing
                 }
           sampleCustomerIdJson backend cId Nothing `shouldReturn` sumLift expected
+
+      itWithOuter "customerIdJson returns a Customer object with an API version" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            apiVersion = ApiVersion 777
+        sampleCustomerIdJson backend 0 (Just apiVersion) `shouldReturn` sumLift
+          Customer
+            { customerName = "Mr. 0"
+            , customerId = 0
+            , customerApiVersion = Just apiVersion
+            }
 
       itWithOuter "customerIdJson returns an error object if customerId is 503" $ \(manager, port) -> do
         let backend = buildBackend port manager
@@ -132,6 +143,19 @@ spec =
                 @(WithStatus Status503 (ContentTypes '[Json, PlainText]))
                 (headered @"X-ErrorId" ("SERVER ERROR" :: T.Text) ("error" :: T.Text))
         sampleCustomerIdTxtHeadered backend cId `shouldReturn` expected
+
+      itWithOuter "echoApiVersion returns the API version" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            apiVersion = ApiVersion 111
+        sampleEchoApiVersion backend apiVersion `shouldReturn` apiVersion
+
+      itWithOuter "getExampleRequestHeaders returns the value of ExampleRequestHeaders" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            exampleRequestHeaders = ExampleRequestHeaders
+              { exampleRequestHeadersApiVersion = ApiVersion 222
+              , exampleRequestHeadersApiKey     = "api-key"
+              }
+        sampleGetExampleRequestHeaders backend exampleRequestHeaders `shouldReturn` exampleRequestHeaders
 
 
 withServer :: (Port -> IO ()) -> IO ()

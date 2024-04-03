@@ -327,7 +327,7 @@ spec =
       assertStatus 201 res
       assertBody expectedBody res
 
-    it "POST /echoApiVersion returns an 422 error given neither X-API-VERSION nor X-API-REVISION request header" . runStateTClientState $ do
+    it "POST /echoApiVersion returns an 422 error not given either X-API-VERSION or X-API-REVISION request header" . runStateTClientState $ do
       let req = defaultRequest
                   { WaiI.requestMethod = methodPost }
                   `setPath` "/echoApiVersion/"
@@ -341,10 +341,10 @@ spec =
       let req = defaultRequest
                   `setPath` "/exampleRequestHeaders/"
                   `addHeader` ("Accept", "*/*")
-                  `addHeader` ("X-API-VERSION", BSL.toStrict expectedVersion)
-                  `addHeader` ("X-API-KEY", BSL.toStrict expectedKey)
-          expectedVersion = "3333"
-          expectedKey = "key"
+                  `addHeader` ("X-API-VERSION", BS.pack . show $ unApiVersion expectedVersion)
+                  `addHeader` ("X-API-KEY", TE.encodeUtf8 expectedKey)
+          expectedVersion = ApiVersion 3333
+          expectedKey = "key 1"
           expectedBody = ExampleRequestHeaders
             { exampleRequestHeadersApiVersion = expectedVersion
             , exampleRequestHeadersApiKey = expectedKey
@@ -357,6 +357,45 @@ spec =
       assertHeaders expectedHeaders res
       liftIO $ A.decode (simpleBody res) `shouldBe` Just expectedBody
 
+    it "GET /exampleRequestHeaders returns the value of X-API-REVISION and X-API-KEY request headers" . runStateTClientState $ do
+      let req = defaultRequest
+                  `setPath` "/exampleRequestHeaders/"
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-REVISION", BS.pack . show $ unApiVersion expectedVersion)
+                  `addHeader` ("X-API-KEY", TE.encodeUtf8 expectedKey)
+          expectedVersion = ApiVersion 4444
+          expectedKey = "key 2"
+          expectedBody = ExampleRequestHeaders
+            { exampleRequestHeadersApiVersion = expectedVersion
+            , exampleRequestHeadersApiKey = expectedKey
+            }
+
+      res <- request req
+      assertStatus 200 res
+      let expectedHeaders = [("Content-Type", "application/json")]
+
+      assertHeaders expectedHeaders res
+      liftIO $ A.decode (simpleBody res) `shouldBe` Just expectedBody
+
+    it "GET /exampleRequestHeaders returns an 422 error not given either X-API-VERSION or X-API-REVISION request header" . runStateTClientState $ do
+      let req = defaultRequest
+                  `setPath` "/exampleRequestHeaders/"
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-KEY", "key 3")
+      res <- request req
+      assertStatus 422 res
+      let expectedBody = "422 Unprocessable Entity: Missing request header (one of [\"X-API-VERSION\",\"X-API-REVISION\"])"
+      assertBody expectedBody res
+
+    it "GET /exampleRequestHeaders returns an 422 error not given X-API-KEY request header" . runStateTClientState $ do
+      let req = defaultRequest
+                  `setPath` "/exampleRequestHeaders/"
+                  `addHeader` ("Accept", "*/*")
+                  `addHeader` ("X-API-VERSION", "9999")
+      res <- request req
+      assertStatus 422 res
+      let expectedBody = "422 Unprocessable Entity: Missing request header \"X-API-KEY\""
+      assertBody expectedBody res
 
 assertHeaders :: HasCallStack => ResponseHeaders -> SResponse -> Session ()
 assertHeaders expectedHeaders SResponse { simpleHeaders } =

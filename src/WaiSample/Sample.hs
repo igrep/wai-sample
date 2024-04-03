@@ -42,7 +42,7 @@ instance ToForm Customer
 instance FromForm Customer
 
 
-newtype ApiVersion = ApiVersion Integer
+newtype ApiVersion = ApiVersion { unApiVersion :: Integer }
   deriving stock (Eq, Generic, Show, Lift)
   deriving newtype (ToJSON, FromJSON, ToHttpApiData, FromHttpApiData)
 
