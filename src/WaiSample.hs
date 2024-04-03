@@ -43,6 +43,14 @@ import           WaiSample.Routes
 import           WaiSample.Types
 
 
+showHandlerSpec :: Handler -> T.Text
+showHandlerSpec _ =
+  -- showRoutes が出す情報に加えて、次の情報を適当なフォーマットで返す
+  --   レスポンスの情報: ステータスコード毎のレスポンスボディの型（Content-Type）、レスポンスヘッダーの型
+  --   リクエストの情報: リクエストヘッダーの型
+  error "showHandlerSpec is not defined yet!"
+
+
 showRoutes :: [Handler] -> T.Text
 showRoutes = ("/" <>) . T.intercalate "\n/" . map f
  where
