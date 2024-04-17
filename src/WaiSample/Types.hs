@@ -6,10 +6,12 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures             #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeOperators              #-}
 
 module WaiSample.Types
   ( Route (..)
@@ -34,6 +36,7 @@ module WaiSample.Types
   ) where
 
 import qualified Data.Attoparsec.ByteString       as ABS
+import qualified Data.ByteString.Char8            as BS
 import qualified Data.List.NonEmpty               as NE
 import           Data.Proxy                       (Proxy (Proxy))
 import qualified Data.Text                        as T
@@ -44,6 +47,10 @@ import           Network.HTTP.Types.Method        (Method)
 import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData)
 
+import           GHC.Base                         (Symbol)
+import           GHC.Generics                     (K1 (K1), U1 (U1),
+                                                   (:*:) ((:*:)))
+import           GHC.TypeLits                     (KnownSymbol)
 import           Network.HTTP.Types               (HeaderName, RequestHeaders)
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Response
@@ -108,6 +115,38 @@ options = EndpointOptions
   }
 
 newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
+
+
+-- GHC.Generics を使って、各値コンストラクターとその中の各フィールドを「どのようにrequest headerと相互変換するか（RequestHeaderCodec）」を対応づける型クラスを定義する
+data RequestHeaderCodec (n :: Symbol) v where
+  RequestHeader :: (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => RequestHeaderCodec n v
+
+class HasRequestHeaderCodec (n :: Symbol) v where
+  requestHeaderCodec :: RequestHeaderCodec n v
+
+instance (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => HasRequestHeaderCodec n v where
+  requestHeaderCodec = RequestHeader
+
+data WithRequestHeaderCodec (n :: Symbol) (v :: *) where
+  WithRequestHeaderCodec :: (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => v -> WithRequestHeaderCodec n v
+
+
+class GToRequestHeaders f where
+  gToRequestHeaders :: f a -> RequestHeaders
+
+instance GToRequestHeaders U1 where
+  gToRequestHeaders U1 = []
+
+-- TODO:
+-- instance HasRequestHeaderCodec n v => GToRequestHeaders (K1 i v) where
+instance GToRequestHeaders (K1 i (WithRequestHeaderCodec n v)) where
+  gToRequestHeaders (K1 v) = [(BS.pack $ symbolVal (Proxy @n), toHeader v)]
+
+instance (GToRequestHeaders f, GToRequestHeaders g) => GToRequestHeaders (f :*: g) where
+  gToRequestHeaders (f :*: g) = gToRequestHeaders f <> gToRequestHeaders g
+
+class GFromRequestHeaders f where
+  gFromRequestHeaders :: RequestHeaders -> FromRequestHeadersResult (f a)
 
 
 class ToRequestHeaders h where
