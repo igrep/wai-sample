@@ -198,7 +198,7 @@ newtype FromRequestHeadersResult h =
 --   * If the first argument is 'UnprocessableValueError', where the header value is invalid,
 --     it immediately returns as an error instead of the second argument.
 orHeader :: FromRequestHeadersResult h -> FromRequestHeadersResult h -> FromRequestHeadersResult h
-orHeader (FromRequestHeadersResult eh1) frhr2@(FromRequestHeadersResult eh2) =
+orHeader frhr1@(FromRequestHeadersResult eh1) frhr2@(FromRequestHeadersResult eh2) =
   case eh1 of
     Right v -> pure v
     Left (NoHeaderError hdns1) ->
@@ -206,9 +206,10 @@ orHeader (FromRequestHeadersResult eh1) frhr2@(FromRequestHeadersResult eh2) =
         Right _ -> frhr2
         Left (NoHeaderError hdns2) ->
           FromRequestHeadersResult . Left $ NoHeaderError (hdns1 <> hdns2)
+          --                                               ^^^^^^^^^^^^^^
+          --                                             TODO: Is this correct to append?
         Left (UnprocessableValueError _hdn) -> frhr2
-    Left (UnprocessableValueError hdn) ->
-      FromRequestHeadersResult . Left $ UnprocessableValueError hdn
+    Left (UnprocessableValueError _hdn) -> frhr1
 
 
 decodeHeader :: FromHttpApiData h => HeaderName -> RequestHeaders -> FromRequestHeadersResult h
