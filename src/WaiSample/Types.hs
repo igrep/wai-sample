@@ -37,6 +37,7 @@ module WaiSample.Types
 
 import qualified Data.Attoparsec.ByteString       as ABS
 import qualified Data.ByteString.Char8            as BS
+import qualified Data.CaseInsensitive             as CI
 import qualified Data.List.NonEmpty               as NE
 import           Data.Proxy                       (Proxy (Proxy))
 import qualified Data.Text                        as T
@@ -45,12 +46,13 @@ import           Data.Void                        (Void)
 import           Language.Haskell.TH.Syntax       (Lift)
 import           Network.HTTP.Types.Method        (Method)
 import           Web.HttpApiData                  (FromHttpApiData,
-                                                   ToHttpApiData)
+                                                   ToHttpApiData (toHeader))
 
 import           GHC.Base                         (Symbol)
-import           GHC.Generics                     (K1 (K1), U1 (U1),
-                                                   (:*:) ((:*:)))
-import           GHC.TypeLits                     (KnownSymbol)
+import           GHC.Generics                     (K1 (K1), M1 (M1), U1 (U1),
+                                                   (:*:) ((:*:)),
+                                                   (:+:) (L1, R1))
+import           GHC.TypeLits                     (KnownSymbol, symbolVal)
 import           Network.HTTP.Types               (HeaderName, RequestHeaders)
 import           WaiSample.Types.ContentTypes
 import           WaiSample.Types.Response
@@ -127,7 +129,7 @@ class HasRequestHeaderCodec (n :: Symbol) v where
 instance (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => HasRequestHeaderCodec n v where
   requestHeaderCodec = RequestHeader
 
-data WithRequestHeaderCodec (n :: Symbol) (v :: *) where
+data WithRequestHeaderCodec (n :: Symbol) v where
   WithRequestHeaderCodec :: (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => v -> WithRequestHeaderCodec n v
 
 
@@ -140,13 +142,41 @@ instance GToRequestHeaders U1 where
 -- TODO:
 -- instance HasRequestHeaderCodec n v => GToRequestHeaders (K1 i v) where
 instance GToRequestHeaders (K1 i (WithRequestHeaderCodec n v)) where
-  gToRequestHeaders (K1 v) = [(BS.pack $ symbolVal (Proxy @n), toHeader v)]
+  gToRequestHeaders (K1 (WithRequestHeaderCodec v)) = [(CI.mk . BS.pack $ symbolVal (Proxy @n), toHeader v)]
+
+-- TODO:
+-- Use metadata for the request header name
+instance GToRequestHeaders f => GToRequestHeaders (M1 i c f) where
+  gToRequestHeaders (M1 f) = gToRequestHeaders f
 
 instance (GToRequestHeaders f, GToRequestHeaders g) => GToRequestHeaders (f :*: g) where
   gToRequestHeaders (f :*: g) = gToRequestHeaders f <> gToRequestHeaders g
 
+instance (GToRequestHeaders f, GToRequestHeaders g) => GToRequestHeaders (f :+: g) where
+  gToRequestHeaders (L1 f) = gToRequestHeaders f
+  gToRequestHeaders (R1 g) = gToRequestHeaders g
+
 class GFromRequestHeaders f where
   gFromRequestHeaders :: RequestHeaders -> FromRequestHeadersResult (f a)
+
+instance GFromRequestHeaders U1 where
+  gFromRequestHeaders _ = pure U1
+
+instance
+  (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v)
+  => GFromRequestHeaders (K1 i (WithRequestHeaderCodec n v)) where
+  gFromRequestHeaders rhds =
+    K1 . WithRequestHeaderCodec <$> decodeHeader (CI.mk . BS.pack $ symbolVal (Proxy @n)) rhds
+
+instance GFromRequestHeaders f => GFromRequestHeaders (M1 i c f) where
+  gFromRequestHeaders rhds = M1 <$> gFromRequestHeaders rhds
+
+instance (GFromRequestHeaders f, GFromRequestHeaders g) => GFromRequestHeaders (f :*: g) where
+  gFromRequestHeaders rhds = (:*:) <$> gFromRequestHeaders rhds <*> gFromRequestHeaders rhds
+
+instance (GFromRequestHeaders f, GFromRequestHeaders g) => GFromRequestHeaders (f :+: g) where
+  gFromRequestHeaders rhds =
+    (L1 <$> gFromRequestHeaders rhds) `orHeader` (R1 <$> gFromRequestHeaders rhds)
 
 
 class ToRequestHeaders h where
