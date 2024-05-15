@@ -31,12 +31,13 @@ module WaiSample
 
   , module WaiSample.Types
 
+  , showHandlerSpec
   , showRoutes
   ) where
 
 import           Data.Proxy                (Proxy (Proxy))
 import qualified Data.Text                 as T
-import           Data.Typeable             (Typeable)
+import           Data.Typeable             (Typeable, typeRep)
 import           Network.HTTP.Types.Method (Method, methodDelete, methodGet,
                                             methodPatch, methodPost, methodPut)
 import           WaiSample.Routes
@@ -44,18 +45,22 @@ import           WaiSample.Types
 
 
 showHandlerSpec :: Handler -> T.Text
-showHandlerSpec _ =
+showHandlerSpec (Handler resSpec name method tbl opts _hdl) =
+  T.pack name <> " " <> T.pack (show method) <> " " <> showRoute tbl <> "\n"
+    <> "  Request Headers: " <> showRequestHeadersType (requestHeadersType opts) <> "\n"
+
+    -- TODO: More HTTP response specific information
+    <> "  Response: " <> T.pack (show $ typeRep resSpec) <> "\n"
   -- showRoutes が出す情報に加えて、次の情報を適当なフォーマットで返す
   --   レスポンスの情報: ステータスコード毎のレスポンスボディの型（Content-Type）、レスポンスヘッダーの型
   --   リクエストの情報: リクエストヘッダーの型
-  error "showHandlerSpec is not defined yet!"
 
 
 showRoutes :: [Handler] -> T.Text
-showRoutes = ("/" <>) . T.intercalate "\n/" . map f
+showRoutes = T.intercalate "\n" . map f
  where
   f :: Handler -> T.Text
-  f (Handler _resSpec _name _method tbl _opts _hdl) = showRoutes' tbl
+  f (Handler _resSpec _name _method tbl _opts _hdl) = showRoute tbl
 
 
 handler

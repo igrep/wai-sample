@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes        #-}
 {-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveLift                 #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE FlexibleContexts           #-}
@@ -18,21 +19,32 @@ module WaiSample.Types
   , Handler (..)
   , Responder
   , SimpleResponder
+
   , EndpointOptions (..)
   , options
   , RequestInfo (..)
+
   , ToRequestHeaders (..)
   , FromRequestHeaders (..)
   , FromRequestHeadersResult (..)
   , RequestHeaderError (..)
+
+  , RequestHeaderCodec (..)
+  , HasRequestHeaderCodec (..)
+  , WithRequestHeaderCodec (..)
+
   , decodeHeader
   , orHeader
   , WithStatus (..)
+
   , module WaiSample.Types.ContentTypes
   , module WaiSample.Types.Response.Headers
   , module WaiSample.Types.Response
   , module WaiSample.Types.Response.Sum
   , module WaiSample.Types.Status
+
+  , GToRequestHeaders (..)
+  , GFromRequestHeaders (..)
   ) where
 
 import qualified Data.Attoparsec.ByteString       as ABS
@@ -49,8 +61,8 @@ import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData (toHeader))
 
 import           GHC.Base                         (Symbol)
-import           GHC.Generics                     (K1 (K1), M1 (M1), U1 (U1),
-                                                   (:*:) ((:*:)),
+import           GHC.Generics                     (K1 (K1), M1 (M1), Rep,
+                                                   U1 (U1), (:*:) ((:*:)),
                                                    (:+:) (L1, R1))
 import           GHC.TypeLits                     (KnownSymbol, symbolVal)
 import           Network.HTTP.Types               (HeaderName, RequestHeaders)
@@ -241,6 +253,17 @@ data RequestHeaderError =
     NoHeaderError (NE.NonEmpty HeaderName)
   | UnprocessableValueError HeaderName
   deriving (Eq, Show)
+
+
+class ShowRequestHeadersType h where
+  showRequestHeadersType :: Proxy h -> T.Text
+  -- TODO: Add default to ToRequestHeaders and FromRequestHeaders
+  default showRequestHeadersType :: GShowRequestHeadersType (Rep h) => Proxy h -> T.Text
+  showRequestHeadersType _ = gShowRequestHeadersType (Proxy :: Proxy (Rep h a))
+
+
+class GShowRequestHeadersType f where
+  gShowRequestHeadersType :: Proxy (f a) -> T.Text
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)

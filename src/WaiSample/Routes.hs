@@ -26,9 +26,13 @@ decimalPiece = ParsedPath
 paramPiece :: forall a. (ToHttpApiData a, FromHttpApiData a, Typeable a) => Route a
 paramPiece = ParsedPath
 
-showRoutes' :: Route a -> T.Text
-showRoutes' (LiteralPath p)    = p
-showRoutes' (FmapPath _f tbl)  = showRoutes' tbl
-showRoutes' (PurePath _x)      = ""
-showRoutes' (ApPath tblF tblA) = showRoutes' tblF <> showRoutes' tblA
-showRoutes' ParsedPath         = ":param" -- TODO: Name the parameter
+
+showRoute :: Route a -> T.Text
+showRoute = ("/" <>) . go
+ where
+  go :: Route a -> T.Text
+  go (LiteralPath p)    = p
+  go (FmapPath _f tbl)  = go tbl
+  go (PurePath _x)      = ""
+  go (ApPath tblF tblA) = go tblF <> go tblA
+  go ParsedPath         = ":param" -- TODO: Name the parameter
