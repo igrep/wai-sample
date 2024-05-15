@@ -108,12 +108,12 @@ type SimpleResponder a resObj = a -> IO resObj
 
 
 newtype EndpointOptions h = EndpointOptions
-  { headersType :: Proxy h
+  { requestHeadersType :: Proxy h
   }
 
 options :: EndpointOptions Void
 options = EndpointOptions
-  { headersType = Proxy
+  { requestHeadersType = Proxy
   }
 
 newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }

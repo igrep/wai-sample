@@ -92,7 +92,7 @@ sampleRoutes =
       -- /customer/:id.json
       (path "customer/" *> decimalPiece <* path ".json")
       options
-      { headersType = Proxy :: Proxy (Maybe ApiVersion)
+      { requestHeadersType = Proxy :: Proxy (Maybe ApiVersion)
       }
       (\i requestInfo -> do
         let apiVersion = requestHeadersValue requestInfo
@@ -165,7 +165,7 @@ sampleRoutes =
       -- /echoApiVersion
       (path "echoApiVersion/")
       options
-      { headersType = Proxy :: Proxy ApiVersion
+      { requestHeadersType = Proxy :: Proxy ApiVersion
       }
       (\_ requestInfo -> return $ requestHeadersValue requestInfo)
 
@@ -174,7 +174,7 @@ sampleRoutes =
       -- /exampleRequestHeaders
       (path "exampleRequestHeaders/")
       options
-      { headersType = Proxy :: Proxy ExampleRequestHeaders
+      { requestHeadersType = Proxy :: Proxy ExampleRequestHeaders
       }
       (\_ requestInfo -> return $ requestHeadersValue requestInfo)
   ]
