@@ -33,6 +33,8 @@ module WaiSample.Types
   , HasRequestHeaderCodec (..)
   , WithRequestHeaderCodec (..)
 
+  , ShowRequestHeadersType (..)
+
   , decodeHeader
   , orHeader
   , WithStatus (..)
@@ -50,10 +52,11 @@ module WaiSample.Types
 import qualified Data.Attoparsec.ByteString       as ABS
 import qualified Data.ByteString.Char8            as BS
 import qualified Data.CaseInsensitive             as CI
+import           Data.Kind                        (Type)
 import qualified Data.List.NonEmpty               as NE
 import           Data.Proxy                       (Proxy (Proxy))
 import qualified Data.Text                        as T
-import           Data.Typeable                    (Typeable)
+import           Data.Typeable                    (Typeable, typeRep)
 import           Data.Void                        (Void)
 import           Language.Haskell.TH.Syntax       (Lift)
 import           Network.HTTP.Types.Method        (Method)
@@ -104,6 +107,7 @@ data Handler where
       , Typeable h
       , ToRequestHeaders h
       , FromRequestHeaders h
+      , ShowRequestHeadersType h
       )
     => Proxy resSpec
     -> String
@@ -256,14 +260,33 @@ data RequestHeaderError =
 
 
 class ShowRequestHeadersType h where
-  showRequestHeadersType :: Proxy h -> T.Text
+  showRequestHeadersType :: T.Text
   -- TODO: Add default to ToRequestHeaders and FromRequestHeaders
-  default showRequestHeadersType :: GShowRequestHeadersType (Rep h) => Proxy h -> T.Text
-  showRequestHeadersType _ = gShowRequestHeadersType (Proxy :: Proxy (Rep h a))
+  default showRequestHeadersType :: GShowRequestHeadersType (Rep h) => T.Text
+  showRequestHeadersType = gShowRequestHeadersType @(Rep h)
 
 
-class GShowRequestHeadersType f where
-  gShowRequestHeadersType :: Proxy (f a) -> T.Text
+instance ShowRequestHeadersType Void where
+  showRequestHeadersType = "(none)"
+
+
+class GShowRequestHeadersType (f :: Type -> Type) where
+  gShowRequestHeadersType :: T.Text
+
+instance GShowRequestHeadersType U1 where
+  gShowRequestHeadersType = ""
+
+instance (KnownSymbol n, Typeable v) => GShowRequestHeadersType (K1 i (RequestHeaderCodec n v)) where
+  gShowRequestHeadersType = T.pack (symbolVal (Proxy @n)) <> ": " <> T.pack (show $ typeRep (Proxy @v))
+
+instance GShowRequestHeadersType f => GShowRequestHeadersType (M1 i c f) where
+  gShowRequestHeadersType = gShowRequestHeadersType @f
+
+instance (GShowRequestHeadersType f, GShowRequestHeadersType g) => GShowRequestHeadersType (f :*: g) where
+  gShowRequestHeadersType = gShowRequestHeadersType @f <> ", " <> gShowRequestHeadersType @g
+
+instance (GShowRequestHeadersType f, GShowRequestHeadersType g) => GShowRequestHeadersType (f :+: g) where
+  gShowRequestHeadersType = "- " <> gShowRequestHeadersType @f <> "\n" <> gShowRequestHeadersType @g
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)

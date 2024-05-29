@@ -45,9 +45,9 @@ import           WaiSample.Types
 
 
 showHandlerSpec :: Handler -> T.Text
-showHandlerSpec (Handler resSpec name method tbl opts _hdl) =
+showHandlerSpec (Handler resSpec name method tbl (_opts :: EndpointOptions h) _hdl) =
   T.pack name <> " " <> T.pack (show method) <> " " <> showRoute tbl <> "\n"
-    <> "  Request Headers: " <> showRequestHeadersType (requestHeadersType opts) <> "\n"
+    <> "  Request Headers: " <> showRequestHeadersType @h <> "\n"
 
     -- TODO: More HTTP response specific information
     <> "  Response: " <> T.pack (show $ typeRep resSpec) <> "\n"
@@ -74,6 +74,7 @@ handler
   , Typeable h
   , ToRequestHeaders h
   , FromRequestHeaders h
+  , ShowRequestHeadersType h
   )
   => String -> Method -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
 handler = Handler (Proxy :: Proxy resSpec)
@@ -107,6 +108,7 @@ getWith, postWith, putWith, deleteWith, patchWith
   , Typeable h
   , ToRequestHeaders h
   , FromRequestHeaders h
+  , ShowRequestHeadersType h
   )
   => String -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
 getWith name    = handler @resSpec @a name methodGet
