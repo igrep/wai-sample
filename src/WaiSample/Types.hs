@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes        #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DefaultSignatures          #-}
+{-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveLift                 #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE FlexibleContexts           #-}
@@ -11,6 +12,7 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeOperators              #-}
 
@@ -64,8 +66,9 @@ import           Web.HttpApiData                  (FromHttpApiData,
                                                    ToHttpApiData (toHeader))
 
 import           GHC.Base                         (Symbol)
-import           GHC.Generics                     (K1 (K1), M1 (M1), Rep,
-                                                   U1 (U1), (:*:) ((:*:)),
+import           GHC.Generics                     (Generic, K1 (K1), M1 (M1),
+                                                   Rep, U1 (U1), from, to,
+                                                   (:*:) ((:*:)),
                                                    (:+:) (L1, R1))
 import           GHC.TypeLits                     (KnownSymbol, symbolVal)
 import           Network.HTTP.Types               (HeaderName, RequestHeaders)
@@ -146,7 +149,21 @@ instance (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => HasR
   requestHeaderCodec = RequestHeader
 
 data WithRequestHeaderCodec (n :: Symbol) v where
-  WithRequestHeaderCodec :: (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => v -> WithRequestHeaderCodec n v
+  WithRequestHeaderCodec :: KnownSymbol n => v -> WithRequestHeaderCodec n v
+
+deriving instance Eq v => Eq (WithRequestHeaderCodec n v)
+deriving instance Lift v => Lift (WithRequestHeaderCodec n v)
+deriving instance Show v => Show (WithRequestHeaderCodec n v)
+deriving instance Functor (WithRequestHeaderCodec n)
+
+instance ToHttpApiData v => ToRequestHeaders (WithRequestHeaderCodec n v) where
+  toRequestHeaders (WithRequestHeaderCodec v) = [(CI.mk . BS.pack $ symbolVal (Proxy @n), toHeader v)]
+
+instance
+  (KnownSymbol n, FromHttpApiData v)
+  => FromRequestHeaders (WithRequestHeaderCodec n v) where
+  fromRequestHeaders rhds =
+    WithRequestHeaderCodec <$> decodeHeader (CI.mk . BS.pack $ symbolVal (Proxy @n)) rhds
 
 
 class GToRequestHeaders f where
@@ -155,10 +172,8 @@ class GToRequestHeaders f where
 instance GToRequestHeaders U1 where
   gToRequestHeaders U1 = []
 
--- TODO:
--- instance HasRequestHeaderCodec n v => GToRequestHeaders (K1 i v) where
-instance GToRequestHeaders (K1 i (WithRequestHeaderCodec n v)) where
-  gToRequestHeaders (K1 (WithRequestHeaderCodec v)) = [(CI.mk . BS.pack $ symbolVal (Proxy @n), toHeader v)]
+instance ToRequestHeaders v => GToRequestHeaders (K1 i v) where
+  gToRequestHeaders (K1 v) = toRequestHeaders v
 
 -- TODO:
 -- Use metadata for the request header name
@@ -178,11 +193,8 @@ class GFromRequestHeaders f where
 instance GFromRequestHeaders U1 where
   gFromRequestHeaders _ = pure U1
 
-instance
-  (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v)
-  => GFromRequestHeaders (K1 i (WithRequestHeaderCodec n v)) where
-  gFromRequestHeaders rhds =
-    K1 . WithRequestHeaderCodec <$> decodeHeader (CI.mk . BS.pack $ symbolVal (Proxy @n)) rhds
+instance FromRequestHeaders v => GFromRequestHeaders (K1 i v) where
+  gFromRequestHeaders rhds = K1 <$> fromRequestHeaders rhds
 
 instance GFromRequestHeaders f => GFromRequestHeaders (M1 i c f) where
   gFromRequestHeaders rhds = M1 <$> gFromRequestHeaders rhds
@@ -197,9 +209,13 @@ instance (GFromRequestHeaders f, GFromRequestHeaders g) => GFromRequestHeaders (
 
 class ToRequestHeaders h where
   toRequestHeaders :: h -> RequestHeaders
+  default toRequestHeaders :: (Generic h, GToRequestHeaders (Rep h)) => h -> RequestHeaders
+  toRequestHeaders = gToRequestHeaders . from
 
 class FromRequestHeaders h where
   fromRequestHeaders :: RequestHeaders -> FromRequestHeadersResult h
+  default fromRequestHeaders :: (Generic h, GFromRequestHeaders (Rep h)) => RequestHeaders -> FromRequestHeadersResult h
+  fromRequestHeaders rhds = to <$> gFromRequestHeaders rhds
 
 
 newtype FromRequestHeadersResult h =
@@ -269,6 +285,9 @@ class ShowRequestHeadersType h where
 instance ShowRequestHeadersType Void where
   showRequestHeadersType = "(none)"
 
+instance ShowRequestHeadersType h => ShowRequestHeadersType (Maybe h) where
+  showRequestHeadersType = showRequestHeadersType @h <> " (optional)"
+
 
 class GShowRequestHeadersType (f :: Type -> Type) where
   gShowRequestHeadersType :: T.Text
@@ -276,7 +295,7 @@ class GShowRequestHeadersType (f :: Type -> Type) where
 instance GShowRequestHeadersType U1 where
   gShowRequestHeadersType = ""
 
-instance (KnownSymbol n, Typeable v) => GShowRequestHeadersType (K1 i (RequestHeaderCodec n v)) where
+instance (KnownSymbol n, Typeable v) => GShowRequestHeadersType (K1 i (WithRequestHeaderCodec n v)) where
   gShowRequestHeadersType = T.pack (symbolVal (Proxy @n)) <> ": " <> T.pack (show $ typeRep (Proxy @v))
 
 instance GShowRequestHeadersType f => GShowRequestHeadersType (M1 i c f) where

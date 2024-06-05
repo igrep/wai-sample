@@ -21,7 +21,8 @@ import           Data.Time.Clock            (UTCTime (UTCTime))
 import           GHC.Generics               (Generic)
 import           Language.Haskell.TH.Syntax (Lift)
 import           Web.FormUrlEncoded         (FromForm, ToForm)
-import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData)
+import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData,
+                                             parseUrlPiece, toUrlPiece)
 
 import           WaiSample
 
@@ -42,35 +43,45 @@ instance ToForm Customer
 instance FromForm Customer
 
 
-newtype ApiVersion = ApiVersion { unApiVersion :: Integer }
+data ApiVersion =
+    ApiVersion (WithRequestHeaderCodec "X-API-VERSION" Integer)
+  | ApiRevision (WithRequestHeaderCodec "X-API-REVISION" Integer)
   deriving stock (Eq, Generic, Show, Lift)
-  deriving newtype (ToJSON, FromJSON, ToHttpApiData, FromHttpApiData)
 
-instance ToRequestHeaders ApiVersion where
-  toRequestHeaders (ApiVersion i) = [("X-API-VERSION", BS.pack (show i))]
+instance ToHttpApiData ApiVersion where
+  toUrlPiece (ApiVersion (WithRequestHeaderCodec i))  = T.pack (show i)
+  toUrlPiece (ApiRevision (WithRequestHeaderCodec i)) = T.pack (show i)
 
-instance FromRequestHeaders ApiVersion where
-  fromRequestHeaders rhds =
-    decodeHeader "X-API-VERSION" rhds `orHeader` decodeHeader "X-API-REVISION" rhds
+instance FromHttpApiData ApiVersion where
+  parseUrlPiece =
+    ApiVersion . WithRequestHeaderCodec @"X-API-VERSION" <$> parseUrlPiece
+
+instance ToJSON ApiVersion where
+  toJSON (ApiVersion (WithRequestHeaderCodec i))  = Json.toJSON i
+  toJSON (ApiRevision (WithRequestHeaderCodec i)) = Json.toJSON i
+
+  toEncoding (ApiVersion (WithRequestHeaderCodec i))  = Json.toEncoding i
+  toEncoding (ApiRevision (WithRequestHeaderCodec i)) = Json.toEncoding i
+
+instance FromJSON ApiVersion where
+  parseJSON =
+    fmap (ApiVersion . WithRequestHeaderCodec @"X-API-VERSION") . Json.parseJSON
+
+instance ToRequestHeaders ApiVersion
+instance FromRequestHeaders ApiVersion
+instance ShowRequestHeadersType ApiVersion
 
 
 data ExampleRequestHeaders = ExampleRequestHeaders
   { exampleRequestHeadersApiVersion :: ApiVersion
   , exampleRequestHeadersApiKey     :: T.Text
-  } deriving stock (Eq, Generic, Show, Lift)
-
-instance ToRequestHeaders ExampleRequestHeaders where
-  toRequestHeaders (ExampleRequestHeaders apiVersion apiKey) =
-    toRequestHeaders apiVersion <> [("X-API-KEY", BS.pack (T.unpack apiKey))]
-
-instance FromRequestHeaders ExampleRequestHeaders where
-  fromRequestHeaders rhds =
-    ExampleRequestHeaders
-      <$> fromRequestHeaders rhds
-      <*> decodeHeader "X-API-KEY" rhds
+  } deriving stock (Eq, Show, Generic, Lift)
 
 $(deriveJsonNoTypeNamePrefix ''ExampleRequestHeaders)
 
+instance ToRequestHeaders ExampleRequestHeaders
+instance FromRequestHeaders ExampleRequestHeaders
+instance ShowRequestHeadersType ExampleRequestHeaders
 
 sampleRoutes :: [Handler]
 sampleRoutes =
