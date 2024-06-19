@@ -22,6 +22,7 @@ common common
     , bytestring
     , http-types
     , http-client
+    , ghc-prim
     , mtl
     , text
     , time

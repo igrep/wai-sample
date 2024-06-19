@@ -12,13 +12,13 @@ module WaiSample.Sample where
 import           Data.Aeson                 (FromJSON, ToJSON, toEncoding)
 import qualified Data.Aeson                 as Json
 import           Data.Aeson.DeriveNoPrefix  (deriveJsonNoTypeNamePrefix)
-import qualified Data.ByteString.Char8      as BS
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Text                  as T
 import qualified Data.Text.IO               as TIO
 import           Data.Time                  (fromGregorian)
 import           Data.Time.Clock            (UTCTime (UTCTime))
 import           GHC.Generics               (Generic)
+import           GHC.Prim                   (coerce)
 import           Language.Haskell.TH.Syntax (Lift)
 import           Web.FormUrlEncoded         (FromForm, ToForm)
 import           Web.HttpApiData            (FromHttpApiData, ToHttpApiData,
@@ -72,9 +72,17 @@ instance FromRequestHeaders ApiVersion
 instance ShowRequestHeadersType ApiVersion
 
 
+apiVersion :: Integer -> ApiVersion
+apiVersion = ApiVersion . coerce
+
+unApiVersion :: ApiVersion -> Integer
+unApiVersion (ApiVersion (WithRequestHeaderCodec i))  = i
+unApiVersion (ApiRevision (WithRequestHeaderCodec i)) = i
+
+
 data ExampleRequestHeaders = ExampleRequestHeaders
   { exampleRequestHeadersApiVersion :: ApiVersion
-  , exampleRequestHeadersApiKey     :: T.Text
+  , exampleRequestHeadersApiKey     :: WithRequestHeaderCodec "X-API-KEY" T.Text
   } deriving stock (Eq, Show, Generic, Lift)
 
 $(deriveJsonNoTypeNamePrefix ''ExampleRequestHeaders)
@@ -106,10 +114,10 @@ sampleRoutes =
       { requestHeadersType = Proxy :: Proxy (Maybe ApiVersion)
       }
       (\i requestInfo -> do
-        let apiVersion = requestHeadersValue requestInfo
+        let apiVer = requestHeadersValue requestInfo
         if i == 503
           then return . sumLift $ SampleError "Invalid Customer"
-          else return . sumLift $ customerOfId apiVersion i
+          else return . sumLift $ customerOfId apiVer i
         )
 
   , get @(Sum '[(PlainText, T.Text), Response (WithStatus Status503 PlainText) T.Text])
@@ -190,11 +198,11 @@ sampleRoutes =
       (\_ requestInfo -> return $ requestHeadersValue requestInfo)
   ]
  where
-  customerOfId apiVersion i =
+  customerOfId apiVer i =
     Customer
       { customerName = "Mr. " <> T.pack (show i)
       , customerId = i
-      , customerApiVersion = apiVersion
+      , customerApiVersion = apiVer
       }
 
 

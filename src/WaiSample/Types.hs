@@ -51,12 +51,14 @@ module WaiSample.Types
   , GFromRequestHeaders (..)
   ) where
 
+import qualified Data.Aeson                       as A
 import qualified Data.Attoparsec.ByteString       as ABS
 import qualified Data.ByteString.Char8            as BS
 import qualified Data.CaseInsensitive             as CI
 import           Data.Kind                        (Type)
 import qualified Data.List.NonEmpty               as NE
 import           Data.Proxy                       (Proxy (Proxy))
+import           Data.String                      (IsString)
 import qualified Data.Text                        as T
 import           Data.Typeable                    (Typeable, typeRep)
 import           Data.Void                        (Void)
@@ -148,15 +150,12 @@ class HasRequestHeaderCodec (n :: Symbol) v where
 instance (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => HasRequestHeaderCodec n v where
   requestHeaderCodec = RequestHeader
 
-data WithRequestHeaderCodec (n :: Symbol) v where
-  WithRequestHeaderCodec :: KnownSymbol n => v -> WithRequestHeaderCodec n v
+newtype WithRequestHeaderCodec (n :: Symbol) v =
+  WithRequestHeaderCodec { unWithRequestHeaderCodec :: v }
+  deriving stock (Eq, Ord, Read, Show, Lift, Functor)
+  deriving newtype (Num, Fractional, IsString, ToHttpApiData, FromHttpApiData, A.ToJSON, A.FromJSON)
 
-deriving instance Eq v => Eq (WithRequestHeaderCodec n v)
-deriving instance Lift v => Lift (WithRequestHeaderCodec n v)
-deriving instance Show v => Show (WithRequestHeaderCodec n v)
-deriving instance Functor (WithRequestHeaderCodec n)
-
-instance ToHttpApiData v => ToRequestHeaders (WithRequestHeaderCodec n v) where
+instance (KnownSymbol n, ToHttpApiData v) => ToRequestHeaders (WithRequestHeaderCodec n v) where
   toRequestHeaders (WithRequestHeaderCodec v) = [(CI.mk . BS.pack $ symbolVal (Proxy @n), toHeader v)]
 
 instance
@@ -164,6 +163,9 @@ instance
   => FromRequestHeaders (WithRequestHeaderCodec n v) where
   fromRequestHeaders rhds =
     WithRequestHeaderCodec <$> decodeHeader (CI.mk . BS.pack $ symbolVal (Proxy @n)) rhds
+
+instance (KnownSymbol n, Typeable v) => ShowRequestHeadersType (WithRequestHeaderCodec n v) where
+  showRequestHeadersType = T.pack (symbolVal (Proxy @n)) <> ": " <> T.pack (show $ typeRep (Proxy @v))
 
 
 class GToRequestHeaders f where
@@ -295,8 +297,8 @@ class GShowRequestHeadersType (f :: Type -> Type) where
 instance GShowRequestHeadersType U1 where
   gShowRequestHeadersType = ""
 
-instance (KnownSymbol n, Typeable v) => GShowRequestHeadersType (K1 i (WithRequestHeaderCodec n v)) where
-  gShowRequestHeadersType = T.pack (symbolVal (Proxy @n)) <> ": " <> T.pack (show $ typeRep (Proxy @v))
+instance ShowRequestHeadersType c => GShowRequestHeadersType (K1 i c) where
+  gShowRequestHeadersType = showRequestHeadersType @c
 
 instance GShowRequestHeadersType f => GShowRequestHeadersType (M1 i c f) where
   gShowRequestHeadersType = gShowRequestHeadersType @f

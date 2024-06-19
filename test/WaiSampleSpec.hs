@@ -27,6 +27,7 @@ import           Test.Syd                  (Spec, around, describe, it,
                                             shouldBe, shouldMatchList)
 import           Web.FormUrlEncoded        (urlDecodeAsForm)
 
+import           WaiSample                 (unWithRequestHeaderCodec)
 import           WaiSample.Sample
 import           WaiSample.Server.Sample   (sampleApp)
 
@@ -342,7 +343,7 @@ spec =
                   `setPath` "/exampleRequestHeaders/"
                   `addHeader` ("Accept", "*/*")
                   `addHeader` ("X-API-VERSION", BS.pack . show $ unApiVersion expectedVersion)
-                  `addHeader` ("X-API-KEY", TE.encodeUtf8 expectedKey)
+                  `addHeader` ("X-API-KEY", TE.encodeUtf8 $ unWithRequestHeaderCodec expectedKey)
           expectedVersion = ApiVersion 3333
           expectedKey = "key 1"
           expectedBody = ExampleRequestHeaders
@@ -362,7 +363,7 @@ spec =
                   `setPath` "/exampleRequestHeaders/"
                   `addHeader` ("Accept", "*/*")
                   `addHeader` ("X-API-REVISION", BS.pack . show $ unApiVersion expectedVersion)
-                  `addHeader` ("X-API-KEY", TE.encodeUtf8 expectedKey)
+                  `addHeader` ("X-API-KEY", TE.encodeUtf8 $ unWithRequestHeaderCodec expectedKey)
           expectedVersion = ApiVersion 4444
           expectedKey = "key 2"
           expectedBody = ExampleRequestHeaders

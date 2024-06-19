@@ -77,12 +77,12 @@ spec =
 
       itWithOuter "customerIdJson returns a Customer object with an API version" $ \(manager, port) -> do
         let backend = buildBackend port manager
-            apiVersion = ApiVersion 777
-        sampleCustomerIdJson backend 0 (Just apiVersion) `shouldReturn` sumLift
+            apiVer = ApiVersion 777
+        sampleCustomerIdJson backend 0 (Just apiVer) `shouldReturn` sumLift
           Customer
             { customerName = "Mr. 0"
             , customerId = 0
-            , customerApiVersion = Just apiVersion
+            , customerApiVersion = Just apiVer
             }
 
       itWithOuter "customerIdJson returns an error object if customerId is 503" $ \(manager, port) -> do
@@ -146,8 +146,8 @@ spec =
 
       itWithOuter "echoApiVersion returns the API version" $ \(manager, port) -> do
         let backend = buildBackend port manager
-            apiVersion = ApiVersion 111
-        sampleEchoApiVersion backend apiVersion `shouldReturn` apiVersion
+            apiVer = ApiVersion 111
+        sampleEchoApiVersion backend apiVer `shouldReturn` apiVer
 
       itWithOuter "getExampleRequestHeaders returns the value of ExampleRequestHeaders" $ \(manager, port) -> do
         let backend = buildBackend port manager
