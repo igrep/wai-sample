@@ -49,7 +49,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
   declareEndpointFunction
     ( Handler
         (_ :: Proxy resSpec)
-        handlerName
+        hdrName
         meth
         tbl
         (_opts :: EndpointOptions h)
@@ -62,7 +62,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
             then [e| toRequestHeaders $(varE hdArg) |]
             else [e| [] |]
 
-    let funName = mkName $ makeUpName handlerName
+    let funName = mkName $ makeUpName hdrName
         typeQResSpec = liftTypeQ @resSpec
         typeQRtn = [t| IO |] `appT` liftTypeQ @resObj
         typeQTail =
@@ -72,7 +72,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQTail tbl
 
     let bd = mkName "bd"
-        emsg = "Default MIME type not defined for " ++ show handlerName
+        emsg = "Default MIME type not defined for " ++ show hdrName
         defaultMimeType = show . headNote emsg $ contentTypes @(ResponseType resSpec)
 
     pathNameArgs <- argumentNamesFromRoutingTable tbl
@@ -113,10 +113,10 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     return [sig, def]
 
   makeUpName :: String -> String
-  makeUpName handlerName =
+  makeUpName hdrName =
     if null prefix
-      then handlerName
-      else prefix ++ toUpperFirst handlerName
+      then hdrName
+      else prefix ++ toUpperFirst hdrName
 
   toUpperFirst :: String -> String
   toUpperFirst (first : left) = toUpper first : left

@@ -114,13 +114,14 @@ data Handler where
       , FromRequestHeaders h
       , ShowRequestHeadersType h
       )
-    => Proxy resSpec
-    -> String
-    -> Method
-    -> Route a
-    -> EndpointOptions h
-    -> Responder a h (ResponseObject resSpec)
-    -> Handler
+    =>
+    { handlerResponseSpec :: Proxy resSpec
+    , handlerName :: String
+    , handlerMethod :: Method
+    , handlerRoute :: Route a
+    , handlerOptions :: EndpointOptions h
+    , handlerResponder :: Responder a h (ResponseObject resSpec)
+    } -> Handler
 
 
 type Responder a h resObj = a -> RequestInfo h -> IO resObj
