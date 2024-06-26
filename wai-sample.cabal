@@ -80,7 +80,7 @@ test-suite wai-sample-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      WaiSampleSpec
+      WaiSample.ServerSpec
       WaiSample.ClientSpec
       WaiSample.InvalidRouteSpec
       WaiSample.TypesSpec

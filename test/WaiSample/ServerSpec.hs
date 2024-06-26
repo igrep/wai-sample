@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module WaiSampleSpec
+module WaiSample.ServerSpec
   ( spec
   ) where
 
