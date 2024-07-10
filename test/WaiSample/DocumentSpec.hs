@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module WaiSample.RoutesSpec
+module WaiSample.DocumentSpec
   ( spec
   ) where
 

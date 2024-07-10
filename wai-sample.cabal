@@ -82,7 +82,7 @@ test-suite wai-sample-test
   other-modules:
       WaiSample.ServerSpec
       WaiSample.ClientSpec
-      WaiSample.RoutesSpec
+      WaiSample.DocumentSpec
       WaiSample.InvalidRouteSpec
       WaiSample.TypesSpec
   hs-source-dirs:
