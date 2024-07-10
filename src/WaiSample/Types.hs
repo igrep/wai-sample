@@ -12,7 +12,6 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeOperators              #-}
 
@@ -119,26 +118,31 @@ data Handler where
     , handlerName :: String
     , handlerMethod :: Method
     , handlerRoute :: Route a
-    , handlerOptions :: EndpointOptions h
-    , handlerResponder :: Responder a h (ResponseObject resSpec)
+    , handlerOptions :: EndpointOptions q h
+    , handlerResponder :: Responder a q h (ResponseObject resSpec)
     } -> Handler
 
 
-type Responder a h resObj = a -> RequestInfo h -> IO resObj
+type Responder a q h resObj = a -> RequestInfo q h -> IO resObj
 
 type SimpleResponder a resObj = a -> IO resObj
 
 
-newtype EndpointOptions h = EndpointOptions
-  { requestHeadersType :: Proxy h
+data EndpointOptions q h = EndpointOptions
+  { queryParamsType    :: Proxy q
+  , requestHeadersType :: Proxy h
   }
 
-options :: EndpointOptions Void
+options :: EndpointOptions Void Void
 options = EndpointOptions
-  { requestHeadersType = Proxy
+  { queryParamsType    = Proxy
+  , requestHeadersType = Proxy
   }
 
-newtype RequestInfo h = RequestInfo { requestHeadersValue :: h }
+data RequestInfo q h = RequestInfo
+  { queryParamsValue    :: q
+  , requestHeadersValue :: h
+  }
 
 
 -- GHC.Generics を使って、各値コンストラクターとその中の各フィールドを「どのようにrequest headerと相互変換するか（RequestHeaderCodec）」を対応づける型クラスを定義する
