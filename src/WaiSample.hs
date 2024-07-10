@@ -47,7 +47,8 @@ import           WaiSample.Types
 showHandlerSpec :: Handler -> T.Text
 showHandlerSpec (Handler resSpec name method tbl (_opts :: EndpointOptions h) _hdl) =
   T.pack name <> " " <> T.pack (show method) <> " " <> showRoute tbl <> "\n"
-    <> "  Request Headers: " <> showRequestHeadersType @h <> "\n"
+    <> "  Request:\n"
+    <> "    Headers: " <> showRequestHeadersType @h <> "\n"
 
     -- TODO: More HTTP response specific information
     <> "  Response: " <> T.pack (show $ typeRep resSpec) <> "\n"

@@ -289,7 +289,7 @@ instance ShowRequestHeadersType Void where
   showRequestHeadersType = "(none)"
 
 instance ShowRequestHeadersType h => ShowRequestHeadersType (Maybe h) where
-  showRequestHeadersType = showRequestHeadersType @h <> " (optional)"
+  showRequestHeadersType = "(optional " <> showRequestHeadersType @h <> ")"
 
 
 class GShowRequestHeadersType (f :: Type -> Type) where
@@ -305,10 +305,11 @@ instance GShowRequestHeadersType f => GShowRequestHeadersType (M1 i c f) where
   gShowRequestHeadersType = gShowRequestHeadersType @f
 
 instance (GShowRequestHeadersType f, GShowRequestHeadersType g) => GShowRequestHeadersType (f :*: g) where
-  gShowRequestHeadersType = gShowRequestHeadersType @f <> ", " <> gShowRequestHeadersType @g
+  -- NOTE: & is the strongest operator here, so it doesn't need parentheses
+  gShowRequestHeadersType = gShowRequestHeadersType @f <> " & " <> gShowRequestHeadersType @g
 
 instance (GShowRequestHeadersType f, GShowRequestHeadersType g) => GShowRequestHeadersType (f :+: g) where
-  gShowRequestHeadersType = "- " <> gShowRequestHeadersType @f <> "\n" <> gShowRequestHeadersType @g
+  gShowRequestHeadersType = "(" <> gShowRequestHeadersType @f <> " | " <> gShowRequestHeadersType @g <> ")"
 
 
 data WithStatus status resTyp = WithStatus status resTyp deriving (Eq, Show, Lift)
