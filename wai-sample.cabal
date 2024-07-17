@@ -50,6 +50,8 @@ library
       WaiSample.Types.Response
       WaiSample.Types.Response.Headers
       WaiSample.Types.Response.Sum
+      WaiSample.Types.Request.QueryParams
+      WaiSample.Types.Request.Headers
       WaiSample.Types.ContentTypes
       WaiSample.Types.Status
       WaiSample.Internal
