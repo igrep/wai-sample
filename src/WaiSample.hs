@@ -45,7 +45,7 @@ import           WaiSample.Types
 
 
 showHandlerSpec :: Handler -> T.Text
-showHandlerSpec (Handler resSpec name method tbl (_opts :: EndpointOptions h) _hdl) =
+showHandlerSpec (Handler resSpec name method tbl (_opts :: EndpointOptions q h) _hdl) =
   T.pack name <> " " <> T.pack (show method) <> " " <> showRoute tbl <> "\n"
     <> "  Request:\n"
     <> "    Headers: " <> showRequestHeadersType @h <> "\n"
@@ -65,7 +65,7 @@ showRoutes = T.intercalate "\n" . map f
 
 
 handler
-  :: forall resSpec a h.
+  :: forall resSpec p q h.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
   , Typeable resSpec
@@ -77,12 +77,12 @@ handler
   , FromRequestHeaders h
   , ShowRequestHeadersType h
   )
-  => String -> Method -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
+  => String -> Method -> Route p -> EndpointOptions q h -> Responder p q h (ResponseObject resSpec) -> Handler
 handler = Handler (Proxy :: Proxy resSpec)
 
 
 get, post, put, delete, patch
-  :: forall resSpec a.
+  :: forall resSpec p.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
   , Typeable resSpec
@@ -90,16 +90,16 @@ get, post, put, delete, patch
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
   )
-  => String -> Route a -> SimpleResponder a (ResponseObject resSpec) -> Handler
-get name route respond   = getWith @resSpec @a name route options (\p _reqInfo -> respond p)
-post name route respond   = postWith @resSpec @a name route options (\p _reqInfo -> respond p)
-put name route respond    = putWith @resSpec @a name route options (\p _reqInfo -> respond p)
-delete name route respond = deleteWith @resSpec @a name route options (\p _reqInfo -> respond p)
-patch name  route respond = patchWith @resSpec @a name route options (\p _reqInfo -> respond p)
+  => String -> Route p -> SimpleResponder p (ResponseObject resSpec) -> Handler
+get name route respond   = getWith @resSpec @p name route options (\p _reqInfo -> respond p)
+post name route respond   = postWith @resSpec @p name route options (\p _reqInfo -> respond p)
+put name route respond    = putWith @resSpec @p name route options (\p _reqInfo -> respond p)
+delete name route respond = deleteWith @resSpec @p name route options (\p _reqInfo -> respond p)
+patch name  route respond = patchWith @resSpec @p name route options (\p _reqInfo -> respond p)
 
 
 getWith, postWith, putWith, deleteWith, patchWith
-  :: forall resSpec a h.
+  :: forall resSpec p q h.
   ( ToRawResponse resSpec
   , FromRawResponse resSpec
   , Typeable resSpec
@@ -111,9 +111,9 @@ getWith, postWith, putWith, deleteWith, patchWith
   , FromRequestHeaders h
   , ShowRequestHeadersType h
   )
-  => String -> Route a -> EndpointOptions h -> Responder a h (ResponseObject resSpec) -> Handler
-getWith name    = handler @resSpec @a name methodGet
-postWith name   = handler @resSpec @a name methodPost
-putWith name    = handler @resSpec @a name methodPut
-deleteWith name = handler @resSpec @a name methodDelete
-patchWith name  = handler @resSpec @a name methodPatch
+  => String -> Route p -> EndpointOptions q h -> Responder p q h (ResponseObject resSpec) -> Handler
+getWith name    = handler @resSpec @p name methodGet
+postWith name   = handler @resSpec @p name methodPost
+putWith name    = handler @resSpec @p name methodPut
+deleteWith name = handler @resSpec @p name methodDelete
+patchWith name  = handler @resSpec @p name methodPatch

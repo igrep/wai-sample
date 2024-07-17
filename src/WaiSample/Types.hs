@@ -81,16 +81,16 @@ import           WaiSample.Types.Status
 import           Web.Internal.HttpApiData         (parseHeader)
 
 
-data Route a where
+data Route p where
   LiteralPath :: T.Text -> Route T.Text
 
   -- TODO: Rename into FmapRoute, PureRoute and ApRoute.
   -- | '<$>'
-  FmapPath :: (a -> b) -> Route a -> Route b
-  PurePath :: a -> Route a
+  FmapPath :: (pa -> pb) -> Route pa -> Route pb
+  PurePath :: p -> Route p
   -- | '<*>'
-  ApPath :: Route (a -> b) -> Route a -> Route b
-  ParsedPath :: (ToHttpApiData a, FromHttpApiData a, Typeable a) => Route a
+  ApPath :: Route (pa -> pb) -> Route pa -> Route pb
+  ParsedPath :: (ToHttpApiData p, FromHttpApiData p, Typeable p) => Route p
 
 instance Functor Route where
   fmap = FmapPath
@@ -108,6 +108,7 @@ data Handler where
       , Typeable (ResponseObject resSpec)
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)
+      , Typeable q
       , Typeable h
       , ToRequestHeaders h
       , FromRequestHeaders h
@@ -117,15 +118,15 @@ data Handler where
     { handlerResponseSpec :: Proxy resSpec
     , handlerName :: String
     , handlerMethod :: Method
-    , handlerRoute :: Route a
+    , handlerRoute :: Route p
     , handlerOptions :: EndpointOptions q h
-    , handlerResponder :: Responder a q h (ResponseObject resSpec)
+    , handlerResponder :: Responder p q h (ResponseObject resSpec)
     } -> Handler
 
 
-type Responder a q h resObj = a -> RequestInfo q h -> IO resObj
+type Responder p q h resObj = p -> RequestInfo q h -> IO resObj
 
-type SimpleResponder a resObj = a -> IO resObj
+type SimpleResponder p resObj = p -> IO resObj
 
 
 data EndpointOptions q h = EndpointOptions

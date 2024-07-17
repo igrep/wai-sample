@@ -52,8 +52,8 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         hdrName
         meth
         tbl
-        (_opts :: EndpointOptions h)
-        (_responder :: Responder a h resObj)
+        (_opts :: EndpointOptions q h)
+        (_responder :: Responder a q h resObj)
     ) = do
     let hdArg = mkName "reqHds"
         hasReqHdArg = not (isVoid @h)

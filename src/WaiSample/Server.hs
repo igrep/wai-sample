@@ -41,7 +41,7 @@ handles hdls req respond' = bracket_ (return ()) (return ()) $ do
 
 
 runHandler :: Handler -> Request -> Maybe (IO Wai.Response)
-runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOptions h) respond) req =
+runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOptions q h) respond) req =
   act <$> runRoutingTable tbl req
  where
   act x =
@@ -58,7 +58,7 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOpti
 
               case unFromRequestHeadersResult $ fromRequestHeaders (requestHeaders req) of
                   Right reqHdObj -> do
-                    resObj <- respond x (RequestInfo reqHdObj)
+                    resObj <- respond x (RequestInfo _q reqHdObj)
                     rawRes <- toRawResponse @resSpec mime resObj
                     let mst = rawStatusCode rawRes
                         stC =
