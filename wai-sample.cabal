@@ -27,6 +27,7 @@ common common
     , safe
     , text
     , time
+    , utf8-string
     , wai
     , warp
   default-language: Haskell2010

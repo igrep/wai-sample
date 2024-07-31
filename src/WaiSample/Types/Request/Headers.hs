@@ -3,7 +3,12 @@
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveLift                 #-}
 {-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures             #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeApplications           #-}
@@ -122,7 +127,7 @@ newtype FromRequestHeadersResult h =
 -- | Choose one from a couple of 'FromRequestHeadersResult's.
 --   * If the first argument is 'Right', it returns the first argument.
 --   * If the first argument is 'NoHeaderError', it returns the second argument.
---   * If the first argument is 'UnprocessableValueError', where the header value is invalid,
+--   * If the first argument is 'UnprocessableHeaderValueError', where the header value is invalid,
 --     it immediately returns as an error instead of the second argument.
 orHeader :: FromRequestHeadersResult h -> FromRequestHeadersResult h -> FromRequestHeadersResult h
 orHeader frhr1@(FromRequestHeadersResult eh1) frhr2@(FromRequestHeadersResult eh2) =
@@ -135,8 +140,8 @@ orHeader frhr1@(FromRequestHeadersResult eh1) frhr2@(FromRequestHeadersResult eh
           FromRequestHeadersResult . Left $ NoHeaderError (hdns1 <> hdns2)
           --                                               ^^^^^^^^^^^^^^
           --                                             TODO: Is this correct to append?
-        Left (UnprocessableValueError _hdn) -> frhr2
-    Left (UnprocessableValueError _hdn) -> frhr1
+        Left (UnprocessableHeaderValueError _hdn) -> frhr2
+    Left (UnprocessableHeaderValueError _hdn) -> frhr1
 
 
 decodeHeader :: FromHttpApiData h => HeaderName -> RequestHeaders -> FromRequestHeadersResult h
@@ -146,7 +151,7 @@ decodeHeader hdn rhds =
       FromRequestHeadersResult . Left . NoHeaderError $ hdn NE.:| []
     Just v  ->
       case ABS.parseOnly (parseHeader <* ABS.endOfInput) v of
-        Left _err -> FromRequestHeadersResult . Left $ UnprocessableValueError hdn
+        Left _err -> FromRequestHeadersResult . Left $ UnprocessableHeaderValueError hdn
         Right r   -> pure r
 
 
@@ -166,7 +171,7 @@ instance FromRequestHeaders Void where
 
 data RequestHeaderError =
     NoHeaderError (NE.NonEmpty HeaderName)
-  | UnprocessableValueError HeaderName
+  | UnprocessableHeaderValueError HeaderName
   deriving (Eq, Show)
 
 

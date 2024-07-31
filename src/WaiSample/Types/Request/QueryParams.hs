@@ -3,7 +3,12 @@
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveLift                 #-}
 {-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures             #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeApplications           #-}
@@ -13,13 +18,14 @@ module WaiSample.Types.Request.QueryParams where
 
 import qualified Data.Aeson                 as A
 import qualified Data.Attoparsec.ByteString as ABS
-import qualified Data.ByteString.Char8      as BS
+import qualified Data.ByteString.UTF8       as BS
 import qualified Data.CaseInsensitive       as CI
 import           Data.Kind                  (Type)
 import qualified Data.List.NonEmpty         as NE
 import           Data.Proxy                 (Proxy (Proxy))
 import           Data.String                (IsString)
 import qualified Data.Text                  as T
+import           Data.Text.Encoding         (encodeUtf8)
 import           Data.Typeable              (Typeable, typeRep)
 import           Data.Void                  (Void)
 import           GHC.Base                   (Symbol)
@@ -28,12 +34,10 @@ import           GHC.Generics               (Generic, K1 (K1), M1 (M1), Rep,
                                              (:+:) (L1, R1))
 import           GHC.TypeLits               (KnownSymbol, symbolVal)
 import           Language.Haskell.TH.Syntax (Lift)
-import           Network.HTTP.Types         (HeaderName, RequestHeaders)
+import           Network.HTTP.Types.URI     (Query)
 import           Web.HttpApiData            (FromHttpApiData,
-                                             ToHttpApiData (toHeader))
+                                             ToHttpApiData (toHeader, toQueryParam))
 import           Web.Internal.HttpApiData   (parseHeader)
-
--- TODO: Query Params 向けに書き換える。parseHeaderではなくparseQueryParamを使うなど
 
 
 data QueryParamCodec (n :: Symbol) v where
@@ -51,20 +55,20 @@ newtype WithQueryParamCodec (n :: Symbol) v =
   deriving newtype (Num, Fractional, IsString, ToHttpApiData, FromHttpApiData, A.ToJSON, A.FromJSON)
 
 instance (KnownSymbol n, ToHttpApiData v) => ToQueryParams (WithQueryParamCodec n v) where
-  toQueryParams (WithQueryParamCodec v) = [(CI.mk . BS.pack $ symbolVal (Proxy @n), toHeader v)]
+  toQueryParams (WithQueryParamCodec v) = [(BS.fromString $ symbolVal (Proxy @n), Just . encodeUtf8 $ toQueryParam v)]
 
 instance
   (KnownSymbol n, FromHttpApiData v)
   => FromQueryParams (WithQueryParamCodec n v) where
   fromQueryParams rhds =
-    WithQueryParamCodec <$> decodeHeader (CI.mk . BS.pack $ symbolVal (Proxy @n)) rhds
+    WithQueryParamCodec <$> decodeQuery (BS.fromString $ symbolVal (Proxy @n)) rhds
 
 instance (KnownSymbol n, Typeable v) => ShowQueryParamsType (WithQueryParamCodec n v) where
   showQueryParamsType = T.pack (symbolVal (Proxy @n)) <> ": " <> T.pack (show $ typeRep (Proxy @v))
 
 
 class GToQueryParams f where
-  gToQueryParams :: f a -> QueryParams
+  gToQueryParams :: f a -> Query
 
 instance GToQueryParams U1 where
   gToQueryParams U1 = []
@@ -85,7 +89,7 @@ instance (GToQueryParams f, GToQueryParams g) => GToQueryParams (f :+: g) where
   gToQueryParams (R1 g) = gToQueryParams g
 
 class GFromQueryParams f where
-  gFromQueryParams :: QueryParams -> FromQueryParamsResult (f a)
+  gFromQueryParams :: Query -> FromQueryParamsResult (f a)
 
 instance GFromQueryParams U1 where
   gFromQueryParams _ = pure U1
@@ -105,13 +109,13 @@ instance (GFromQueryParams f, GFromQueryParams g) => GFromQueryParams (f :+: g) 
 
 
 class ToQueryParams h where
-  toQueryParams :: h -> QueryParams
-  default toQueryParams :: (Generic h, GToQueryParams (Rep h)) => h -> QueryParams
+  toQueryParams :: h -> Query
+  default toQueryParams :: (Generic h, GToQueryParams (Rep h)) => h -> Query
   toQueryParams = gToQueryParams . from
 
 class FromQueryParams h where
-  fromQueryParams :: QueryParams -> FromQueryParamsResult h
-  default fromQueryParams :: (Generic h, GFromQueryParams (Rep h)) => QueryParams -> FromQueryParamsResult h
+  fromQueryParams :: Query -> FromQueryParamsResult h
+  default fromQueryParams :: (Generic h, GFromQueryParams (Rep h)) => Query -> FromQueryParamsResult h
   fromQueryParams rhds = to <$> gFromQueryParams rhds
 
 
@@ -130,25 +134,25 @@ orHeader :: FromQueryParamsResult h -> FromQueryParamsResult h -> FromQueryParam
 orHeader frhr1@(FromQueryParamsResult eh1) frhr2@(FromQueryParamsResult eh2) =
   case eh1 of
     Right v -> pure v
-    Left (NoHeaderError hdns1) ->
+    Left (NoQueryItemError hdns1) ->
       case eh2 of
         Right _ -> frhr2
-        Left (NoHeaderError hdns2) ->
-          FromQueryParamsResult . Left $ NoHeaderError (hdns1 <> hdns2)
+        Left (NoQueryItemError hdns2) ->
+          FromQueryParamsResult . Left $ NoQueryItemError (hdns1 <> hdns2)
           --                                               ^^^^^^^^^^^^^^
           --                                             TODO: Is this correct to append?
-        Left (UnprocessableValueError _hdn) -> frhr2
-    Left (UnprocessableValueError _hdn) -> frhr1
+        Left (UnprocessableQueryValueError _hdn) -> frhr2
+    Left (UnprocessableQueryValueError _hdn) -> frhr1
 
 
-decodeHeader :: FromHttpApiData h => HeaderName -> QueryParams -> FromQueryParamsResult h
-decodeHeader hdn rhds =
-  case lookup hdn rhds of
+decodeQuery :: FromHttpApiData h => QueryItemName -> Query -> FromQueryParamsResult h
+decodeQuery qn qs =
+  case lookup qn qs of
     Nothing ->
-      FromQueryParamsResult . Left . NoHeaderError $ hdn NE.:| []
+      FromQueryParamsResult . Left . NoQueryItemError $ qn NE.:| []
     Just v  ->
       case ABS.parseOnly (parseHeader <* ABS.endOfInput) v of
-        Left _err -> FromQueryParamsResult . Left $ UnprocessableValueError hdn
+        Left _err -> FromQueryParamsResult . Left $ UnprocessableQueryValueError qn
         Right r   -> pure r
 
 
@@ -167,9 +171,11 @@ instance FromQueryParams Void where
 
 
 data QueryParamError =
-    NoHeaderError (NE.NonEmpty HeaderName)
-  | UnprocessableValueError HeaderName
+    NoQueryItemError (NE.NonEmpty QueryItemName)
+  | UnprocessableQueryValueError QueryItemName
   deriving (Eq, Show)
+
+type QueryItemName = BS.ByteString
 
 
 class ShowQueryParamsType h where
