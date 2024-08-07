@@ -17,15 +17,14 @@
 module WaiSample.Types.Request.QueryParams where
 
 import qualified Data.Aeson                 as A
-import qualified Data.Attoparsec.ByteString as ABS
+import qualified Data.Attoparsec.Text       as AT
 import qualified Data.ByteString.UTF8       as BS
-import qualified Data.CaseInsensitive       as CI
 import           Data.Kind                  (Type)
 import qualified Data.List.NonEmpty         as NE
 import           Data.Proxy                 (Proxy (Proxy))
 import           Data.String                (IsString)
 import qualified Data.Text                  as T
-import           Data.Text.Encoding         (encodeUtf8)
+import           Data.Text.Encoding         (decodeUtf8, encodeUtf8)
 import           Data.Typeable              (Typeable, typeRep)
 import           Data.Void                  (Void)
 import           GHC.Base                   (Symbol)
@@ -34,20 +33,20 @@ import           GHC.Generics               (Generic, K1 (K1), M1 (M1), Rep,
                                              (:+:) (L1, R1))
 import           GHC.TypeLits               (KnownSymbol, symbolVal)
 import           Language.Haskell.TH.Syntax (Lift)
-import           Network.HTTP.Types.URI     (Query)
+import           Network.HTTP.Types.URI     (SimpleQuery)
 import           Web.HttpApiData            (FromHttpApiData,
-                                             ToHttpApiData (toHeader, toQueryParam))
-import           Web.Internal.HttpApiData   (parseHeader)
+                                             ToHttpApiData (toQueryParam))
+import           Web.Internal.HttpApiData   (parseQueryParam)
 
 
 data QueryParamCodec (n :: Symbol) v where
   QueryParam :: (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => QueryParamCodec n v
 
 class HasQueryParamCodec (n :: Symbol) v where
-  requestHeaderCodec :: QueryParamCodec n v
+  queryParamCodec :: QueryParamCodec n v
 
 instance (KnownSymbol n, ToHttpApiData v, FromHttpApiData v, Typeable v) => HasQueryParamCodec n v where
-  requestHeaderCodec = QueryParam
+  queryParamCodec = QueryParam
 
 newtype WithQueryParamCodec (n :: Symbol) v =
   WithQueryParamCodec { unWithQueryParamCodec :: v }
@@ -55,7 +54,7 @@ newtype WithQueryParamCodec (n :: Symbol) v =
   deriving newtype (Num, Fractional, IsString, ToHttpApiData, FromHttpApiData, A.ToJSON, A.FromJSON)
 
 instance (KnownSymbol n, ToHttpApiData v) => ToQueryParams (WithQueryParamCodec n v) where
-  toQueryParams (WithQueryParamCodec v) = [(BS.fromString $ symbolVal (Proxy @n), Just . encodeUtf8 $ toQueryParam v)]
+  toQueryParams (WithQueryParamCodec v) = [(BS.fromString $ symbolVal (Proxy @n), encodeUtf8 $ toQueryParam v)]
 
 instance
   (KnownSymbol n, FromHttpApiData v)
@@ -64,11 +63,11 @@ instance
     WithQueryParamCodec <$> decodeQuery (BS.fromString $ symbolVal (Proxy @n)) rhds
 
 instance (KnownSymbol n, Typeable v) => ShowQueryParamsType (WithQueryParamCodec n v) where
-  showQueryParamsType = T.pack (symbolVal (Proxy @n)) <> ": " <> T.pack (show $ typeRep (Proxy @v))
+  showQueryParamsType = T.pack (symbolVal (Proxy @n)) <> "=" <> T.pack (show $ typeRep (Proxy @v))
 
 
 class GToQueryParams f where
-  gToQueryParams :: f a -> Query
+  gToQueryParams :: f a -> SimpleQuery
 
 instance GToQueryParams U1 where
   gToQueryParams U1 = []
@@ -77,7 +76,7 @@ instance ToQueryParams v => GToQueryParams (K1 i v) where
   gToQueryParams (K1 v) = toQueryParams v
 
 -- TODO:
--- Use metadata for the request header name
+-- Use metadata for the query item name
 instance GToQueryParams f => GToQueryParams (M1 i c f) where
   gToQueryParams (M1 f) = gToQueryParams f
 
@@ -89,7 +88,7 @@ instance (GToQueryParams f, GToQueryParams g) => GToQueryParams (f :+: g) where
   gToQueryParams (R1 g) = gToQueryParams g
 
 class GFromQueryParams f where
-  gFromQueryParams :: Query -> FromQueryParamsResult (f a)
+  gFromQueryParams :: SimpleQuery -> FromQueryParamsResult (f a)
 
 instance GFromQueryParams U1 where
   gFromQueryParams _ = pure U1
@@ -105,53 +104,53 @@ instance (GFromQueryParams f, GFromQueryParams g) => GFromQueryParams (f :*: g) 
 
 instance (GFromQueryParams f, GFromQueryParams g) => GFromQueryParams (f :+: g) where
   gFromQueryParams rhds =
-    (L1 <$> gFromQueryParams rhds) `orHeader` (R1 <$> gFromQueryParams rhds)
+    (L1 <$> gFromQueryParams rhds) `orQuery` (R1 <$> gFromQueryParams rhds)
 
 
-class ToQueryParams h where
-  toQueryParams :: h -> Query
-  default toQueryParams :: (Generic h, GToQueryParams (Rep h)) => h -> Query
+class ToQueryParams q where
+  toQueryParams :: q -> SimpleQuery
+  default toQueryParams :: (Generic q, GToQueryParams (Rep q)) => q -> SimpleQuery
   toQueryParams = gToQueryParams . from
 
-class FromQueryParams h where
-  fromQueryParams :: Query -> FromQueryParamsResult h
-  default fromQueryParams :: (Generic h, GFromQueryParams (Rep h)) => Query -> FromQueryParamsResult h
+class FromQueryParams q where
+  fromQueryParams :: SimpleQuery -> FromQueryParamsResult q
+  default fromQueryParams :: (Generic q, GFromQueryParams (Rep q)) => SimpleQuery -> FromQueryParamsResult q
   fromQueryParams rhds = to <$> gFromQueryParams rhds
 
 
-newtype FromQueryParamsResult h =
-  FromQueryParamsResult { unFromQueryParamsResult :: Either QueryParamError h }
+newtype FromQueryParamsResult q =
+  FromQueryParamsResult { unFromQueryParamsResult :: Either QueryParamError q }
   deriving stock (Eq, Show)
   deriving newtype (Functor, Applicative)
 
 
 -- | Choose one from a couple of 'FromQueryParamsResult's.
 --   * If the first argument is 'Right', it returns the first argument.
---   * If the first argument is 'NoHeaderError', it returns the second argument.
---   * If the first argument is 'UnprocessableValueError', where the header value is invalid,
+--   * If the first argument is 'NoQueryItemError', it returns the second argument.
+--   * If the first argument is 'UnprocessableValueError', where the query value is invalid,
 --     it immediately returns as an error instead of the second argument.
-orHeader :: FromQueryParamsResult h -> FromQueryParamsResult h -> FromQueryParamsResult h
-orHeader frhr1@(FromQueryParamsResult eh1) frhr2@(FromQueryParamsResult eh2) =
-  case eh1 of
+orQuery :: FromQueryParamsResult q -> FromQueryParamsResult q -> FromQueryParamsResult q
+orQuery fqpr1@(FromQueryParamsResult eq1) fqpr2@(FromQueryParamsResult eq2) =
+  case eq1 of
     Right v -> pure v
-    Left (NoQueryItemError hdns1) ->
-      case eh2 of
-        Right _ -> frhr2
-        Left (NoQueryItemError hdns2) ->
-          FromQueryParamsResult . Left $ NoQueryItemError (hdns1 <> hdns2)
+    Left (NoQueryItemError qns1) ->
+      case eq2 of
+        Right _ -> fqpr2
+        Left (NoQueryItemError qns2) ->
+          FromQueryParamsResult . Left $ NoQueryItemError (qns1 <> qns2)
           --                                               ^^^^^^^^^^^^^^
           --                                             TODO: Is this correct to append?
-        Left (UnprocessableQueryValueError _hdn) -> frhr2
-    Left (UnprocessableQueryValueError _hdn) -> frhr1
+        Left (UnprocessableQueryValueError _qn) -> fqpr2
+    Left (UnprocessableQueryValueError _qn) -> fqpr1
 
 
-decodeQuery :: FromHttpApiData h => QueryItemName -> Query -> FromQueryParamsResult h
+decodeQuery :: FromHttpApiData q => QueryItemName -> SimpleQuery -> FromQueryParamsResult q
 decodeQuery qn qs =
   case lookup qn qs of
     Nothing ->
       FromQueryParamsResult . Left . NoQueryItemError $ qn NE.:| []
     Just v  ->
-      case ABS.parseOnly (parseHeader <* ABS.endOfInput) v of
+      case AT.parseOnly (parseQueryParam <* AT.endOfInput) $ decodeUtf8 v of
         Left _err -> FromQueryParamsResult . Left $ UnprocessableQueryValueError qn
         Right r   -> pure r
 
@@ -160,7 +159,7 @@ instance ToQueryParams a => ToQueryParams (Maybe a) where
   toQueryParams = maybe [] toQueryParams
 
 instance FromQueryParams a => FromQueryParams (Maybe a) where
-  fromQueryParams hds = (Just <$> fromQueryParams hds) `orHeader` pure Nothing
+  fromQueryParams qs = (Just <$> fromQueryParams qs) `orQuery` pure Nothing
 
 
 instance ToQueryParams Void where
@@ -178,18 +177,18 @@ data QueryParamError =
 type QueryItemName = BS.ByteString
 
 
-class ShowQueryParamsType h where
+class ShowQueryParamsType q where
   showQueryParamsType :: T.Text
   -- TODO: Add default to ToQueryParams and FromQueryParams
-  default showQueryParamsType :: GShowQueryParamsType (Rep h) => T.Text
-  showQueryParamsType = gShowQueryParamsType @(Rep h)
+  default showQueryParamsType :: GShowQueryParamsType (Rep q) => T.Text
+  showQueryParamsType = gShowQueryParamsType @(Rep q)
 
 
 instance ShowQueryParamsType Void where
   showQueryParamsType = "(none)"
 
-instance ShowQueryParamsType h => ShowQueryParamsType (Maybe h) where
-  showQueryParamsType = "(optional " <> showQueryParamsType @h <> ")"
+instance ShowQueryParamsType q => ShowQueryParamsType (Maybe q) where
+  showQueryParamsType = "(optional " <> showQueryParamsType @q <> ")"
 
 
 class GShowQueryParamsType (f :: Type -> Type) where
