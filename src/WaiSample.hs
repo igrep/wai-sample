@@ -72,6 +72,10 @@ handler
   , Typeable (ResponseObject resSpec)
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
+  , Typeable q
+  , ToQueryParams q
+  , FromQueryParams q
+  , ShowQueryParamsType q
   , Typeable h
   , ToRequestHeaders h
   , FromRequestHeaders h
@@ -106,6 +110,10 @@ getWith, postWith, putWith, deleteWith, patchWith
   , Typeable (ResponseObject resSpec)
   , HasStatusCode (ResponseType resSpec)
   , HasContentTypes (ResponseType resSpec)
+  , Typeable q
+  , ToQueryParams q
+  , FromQueryParams q
+  , ShowQueryParamsType q
   , Typeable h
   , ToRequestHeaders h
   , FromRequestHeaders h

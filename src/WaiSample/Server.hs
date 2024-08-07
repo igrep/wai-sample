@@ -70,7 +70,7 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOpti
                     if null others
                       then return422 $ "Missing request header \"" <> fromStrict (original name) <> "\""
                       else return422 $ "Missing request header (one of " <> BSL.pack (show (name : others)) <> ")"
-                  Left (UnprocessableValueError name) ->
+                  Left (UnprocessableHeaderValueError name) ->
                     return422 $ "request header \"" <> fromStrict (original name) <> "\" is invalid."
             Nothing ->
               return $ responseLBS HTS.status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable."
@@ -90,3 +90,11 @@ parserFromRoutingTable ParsedPath = parseUrlPiece
 runRoutingTable :: Route a -> Request -> Maybe a
 runRoutingTable tbl =
   hush . AT.parseOnly (parserFromRoutingTable tbl <* AT.endOfInput) . T.intercalate "/" . pathInfo
+
+
+data HttpError =
+  HttpError
+  { httpErrorStatus :: HTS.Status
+  , httpErrorBody   :: BSL.ByteString
+  }
+  deriving (Eq, Show)
