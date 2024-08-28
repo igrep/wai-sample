@@ -21,10 +21,11 @@ import           Network.HTTP.Types.Header  (hContentType)
 import qualified Network.HTTP.Types.Status  as HTS
 import           Network.Wai                (Application,
                                              Request (requestHeaders, requestMethod),
-                                             pathInfo, responseLBS)
+                                             pathInfo, queryString, responseLBS)
 import qualified Network.Wai                as Wai
 import           Web.HttpApiData            (parseUrlPiece)
 
+import           Data.Bifunctor             (first)
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import           WaiSample
 import           WaiSample.Internal         (defaultStatusCodeOf)
@@ -56,16 +57,21 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOpti
                       [(hContentType, "text/plain;charset=UTF-8")]
                       ("422 Unprocessable Entity: " <> msg)
 
+              result <- runExceptT $ do
+                q <- handleFromQueryParamsResult $ fromQueryParams (queryString req)
+                h <- handleFromRequestHeadersResult $ fromRequestHeaders (requestHeaders req)
+                resObj <- liftIO $ respond x (RequestInfo _q reqHdObj)
+                rawRes <- liftIO $ toRawResponse @resSpec mime resObj
+                let mst = rawStatusCode rawRes
+                    stC =
+                      case mst of
+                          NonDefaultStatus st -> st
+                          DefaultStatus       -> defaultStatusCodeOf method
+                return . responseLBS stC (rawHeaders rawRes) $ rawBody rawRes
+
+              unFromQueryParamsResult $ fromQueryParams (queryString req)
               case unFromRequestHeadersResult $ fromRequestHeaders (requestHeaders req) of
                   Right reqHdObj -> do
-                    resObj <- respond x (RequestInfo _q reqHdObj)
-                    rawRes <- toRawResponse @resSpec mime resObj
-                    let mst = rawStatusCode rawRes
-                        stC =
-                          case mst of
-                              NonDefaultStatus st -> st
-                              DefaultStatus       -> defaultStatusCodeOf method
-                    return . responseLBS stC (rawHeaders rawRes) $ rawBody rawRes
                   Left (NoHeaderError (name :| others)) ->
                     if null others
                       then return422 $ "Missing request header \"" <> fromStrict (original name) <> "\""
@@ -98,3 +104,25 @@ data HttpError =
   , httpErrorBody   :: BSL.ByteString
   }
   deriving (Eq, Show)
+
+
+handleFromQueryParamsResult :: FromQueryParamsResult q -> ExceptT IO HttpError q
+handleFromQueryParamsResult = ExceptT . return . first f . unFromQueryParamsResult
+ where
+  f (NoQueryItemError (name :| others)) =
+    if null others
+      then HttpError HTS.status422 $ "Missing query parameter \"" <> fromStrict name <> "\""
+      else HttpError HTS.status422 $ "Missing query parameter (one of " <> BSL.pack (show (name : others)) <> ")"
+  f (UnprocessableQueryValueError name) =
+    HttpError HTS.status422 $ "Value of the query parameter \"" <> fromStrict name <> "\" is invalid."
+
+
+handleFromRequestHeadersResult :: FromRequestHeadersResult q -> ExceptT IO HttpError q
+handleFromRequestHeadersResult = ExceptT . return . first f . unFromRequestHeadersResult
+ where
+  f (NoHeaderError (name :| others)) =
+    if null others
+      then HttpError HTS.status422 $ "Missing request header \"" <> fromStrict (original name) <> "\""
+      else HttpError HTS.status422 $ "Missing request header (one of " <> BSL.pack (show (name : others)) <> ")"
+  f (UnprocessableHeaderValueError name) =
+    HttpError HTS.status422 $ "Request header \"" <> fromStrict (original name) <> "\" is invalid."
