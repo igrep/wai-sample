@@ -55,6 +55,13 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         (_opts :: EndpointOptions q h)
         (_responder :: Responder a q h resObj)
     ) = do
+    let qrArg = mkName "reqQrs"
+        hasReqQrArg = not (isVoid @h)
+        qr =
+          if hasReqQrArg
+            then [e| toQueryParams $(varE qrArg) |]
+            else [e| [] |]
+
     let hdArg = mkName "reqHds"
         hasReqHdArg = not (isVoid @h)
         hd =
@@ -88,6 +95,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
               let uri = URI.encode $(p)
                   rawReqHds :: RequestHeaders
                   rawReqHds = $(hd)
+                  rawReqQrs = $(qr)
               res <- $(varE bd) $(liftByteString meth) uri rawReqHds
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypeFromServer = lookup headerName $ responseHeaders res
