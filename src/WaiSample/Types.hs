@@ -84,6 +84,8 @@ data Handler where
       , Typeable h
       , ToRequestHeaders h
       , FromRequestHeaders h
+      , ToQueryParams q
+      , FromQueryParams q
       , ShowRequestHeadersType h
       )
     =>

@@ -6,8 +6,11 @@
 module WaiSample.Server where
 
 
-import           Control.Error.Util         (hush)
+import           Control.Error.Util         (failWith, hush)
 import           Control.Exception          (bracket_)
+import           Control.Monad              (guard)
+import           Control.Monad.Except       (ExceptT (..), runExceptT)
+import           Control.Monad.IO.Class     (liftIO)
 import qualified Data.Attoparsec.Text       as AT
 import           Data.ByteString.Lazy       (fromStrict)
 import           Data.CaseInsensitive       (original)
@@ -25,7 +28,7 @@ import           Network.Wai                (Application,
 import qualified Network.Wai                as Wai
 import           Web.HttpApiData            (parseUrlPiece)
 
-import           Data.Bifunctor             (first)
+import           Data.Bifunctor             (first, second)
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import           WaiSample
 import           WaiSample.Internal         (defaultStatusCodeOf)
@@ -45,42 +48,23 @@ runHandler :: Handler -> Request -> Maybe (IO Wai.Response)
 runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOptions q h) respond) req =
   act <$> runRoutingTable tbl req
  where
-  act x =
-    if method == requestMethod req
-      then do
-        let mMime = matchAccept (contentTypes @(ResponseType resSpec)) acceptHeader
-        case mMime of
-            Just mime -> do
-              let return422 msg =
-                    return $ responseLBS
-                      HTS.status422
-                      [(hContentType, "text/plain;charset=UTF-8")]
-                      ("422 Unprocessable Entity: " <> msg)
+  act x = fmap (either respondWithHttpError id) . runExceptT $ do
+    failWith (HttpError HTS.status405 "Method not allowed.")
+      . guard $ method == requestMethod req
 
-              result <- runExceptT $ do
-                q <- handleFromQueryParamsResult $ fromQueryParams (queryString req)
-                h <- handleFromRequestHeadersResult $ fromRequestHeaders (requestHeaders req)
-                resObj <- liftIO $ respond x (RequestInfo _q reqHdObj)
-                rawRes <- liftIO $ toRawResponse @resSpec mime resObj
-                let mst = rawStatusCode rawRes
-                    stC =
-                      case mst of
-                          NonDefaultStatus st -> st
-                          DefaultStatus       -> defaultStatusCodeOf method
-                return . responseLBS stC (rawHeaders rawRes) $ rawBody rawRes
+    mime <- failWith (HttpError HTS.status406 "Not Acceptable") $
+      matchAccept (contentTypes @(ResponseType resSpec)) acceptHeader
 
-              unFromQueryParamsResult $ fromQueryParams (queryString req)
-              case unFromRequestHeadersResult $ fromRequestHeaders (requestHeaders req) of
-                  Right reqHdObj -> do
-                  Left (NoHeaderError (name :| others)) ->
-                    if null others
-                      then return422 $ "Missing request header \"" <> fromStrict (original name) <> "\""
-                      else return422 $ "Missing request header (one of " <> BSL.pack (show (name : others)) <> ")"
-                  Left (UnprocessableHeaderValueError name) ->
-                    return422 $ "request header \"" <> fromStrict (original name) <> "\" is invalid."
-            Nothing ->
-              return $ responseLBS HTS.status406 [(hContentType, "text/plain;charset=UTF-8")] "406 Not Acceptable."
-      else return $ responseLBS HTS.status405 [(hContentType, "text/plain;charset=UTF-8")] "405 Method not allowed."
+    q <- handleFromQueryParamsResult . fromQueryParams . map (second (fromMaybe "")) $ queryString req
+    h <- handleFromRequestHeadersResult $ fromRequestHeaders (requestHeaders req)
+    resObj <- liftIO $ respond x (RequestInfo q h)
+    rawRes <- liftIO $ toRawResponse @resSpec mime resObj
+    let mst = rawStatusCode rawRes
+        stC =
+          case mst of
+              NonDefaultStatus st -> st
+              DefaultStatus       -> defaultStatusCodeOf method
+    return . responseLBS stC (rawHeaders rawRes) $ rawBody rawRes
 
   acceptHeader = fromMaybe "*/*" . L.lookup "Accept" $ requestHeaders req
 
@@ -106,7 +90,12 @@ data HttpError =
   deriving (Eq, Show)
 
 
-handleFromQueryParamsResult :: FromQueryParamsResult q -> ExceptT IO HttpError q
+respondWithHttpError :: HttpError -> Wai.Response
+respondWithHttpError e =
+  responseLBS (httpErrorStatus e) [(hContentType, "text/plain;charset=UTF-8")] (httpErrorBody e)
+
+
+handleFromQueryParamsResult :: FromQueryParamsResult q -> ExceptT HttpError IO q
 handleFromQueryParamsResult = ExceptT . return . first f . unFromQueryParamsResult
  where
   f (NoQueryItemError (name :| others)) =
@@ -117,7 +106,7 @@ handleFromQueryParamsResult = ExceptT . return . first f . unFromQueryParamsResu
     HttpError HTS.status422 $ "Value of the query parameter \"" <> fromStrict name <> "\" is invalid."
 
 
-handleFromRequestHeadersResult :: FromRequestHeadersResult q -> ExceptT IO HttpError q
+handleFromRequestHeadersResult :: FromRequestHeadersResult q -> ExceptT HttpError IO q
 handleFromRequestHeadersResult = ExceptT . return . first f . unFromRequestHeadersResult
  where
   f (NoHeaderError (name :| others)) =
