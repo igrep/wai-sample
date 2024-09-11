@@ -13,6 +13,7 @@ module WaiSample.Client
 import qualified Control.Monad.State.Strict as SS
 import qualified Data.ByteString.Char8      as B
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.ByteString.UTF8       as BS
 import qualified Data.CaseInsensitive       as CI
 import           Data.Char                  (toLower, toUpper)
 import           Data.Maybe                 (fromMaybe)
@@ -34,6 +35,7 @@ import           Network.HTTP.Client        (Manager, httpLbs, parseUrlThrow,
 import qualified Network.HTTP.Client        as HC
 import           Network.HTTP.Media         (parseAccept)
 import           Network.HTTP.Types         (Method, RequestHeaders)
+import           Network.HTTP.Types.URI     (renderSimpleQuery)
 import qualified Network.URI.Encode         as URI
 import           Safe                       (headNote)
 import           Web.HttpApiData            (toUrlPiece)
@@ -56,9 +58,9 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         (_responder :: Responder a q h resObj)
     ) = do
     let qrArg = mkName "reqQrs"
-        hasReqQrArg = not (isVoid @h)
+        hasQrArg = not (isVoid @q)
         qr =
-          if hasReqQrArg
+          if hasQrArg
             then [e| toQueryParams $(varE qrArg) |]
             else [e| [] |]
 
@@ -84,18 +86,15 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
 
     pathNameArgs <- argumentNamesFromRoutingTable tbl
     let argNames =
-          if hasReqHdArg
-            then bd : pathNameArgs ++ [hdArg]
-            else bd : pathNameArgs
+          bd : pathNameArgs ++ [qrArg | hasQrArg] ++ [hdArg | hasReqHdArg]
         allArgs = map varP argNames
         p = pathBuilderFromRoutingTable pathNameArgs tbl
         defaultStatus = liftHttpStatus $ defaultStatusCodeOf meth
         implE = [|
             do
-              let uri = URI.encode $(p)
+              let uri = URI.encodeTextToBS (T.pack $(p)) <> renderSimpleQuery True $(qr)
                   rawReqHds :: RequestHeaders
                   rawReqHds = $(hd)
-                  rawReqQrs = $(qr)
               res <- $(varE bd) $(liftByteString meth) uri rawReqHds
               let headerName = CI.mk $ B.pack "Content-Type"
                   contentTypeFromServer = lookup headerName $ responseHeaders res
@@ -187,9 +186,9 @@ pathBuilderFromRoutingTable qns = (`SS.evalState` qns) . go
         return arg0
 
 
-isVoid :: forall h. (ToRequestHeaders h, Typeable h) => Bool
+isVoid :: forall a. Typeable a => Bool
 isVoid =
-  typeRep (Proxy :: Proxy h) == typeRep (Proxy :: Proxy Void)
+  typeRep (Proxy :: Proxy a) == typeRep (Proxy :: Proxy Void)
 
 
 typeToNameQ :: forall t. Typeable t => Q Name
@@ -213,13 +212,14 @@ infixr 1 `funcT`
 liftByteString :: B.ByteString -> ExpQ
 liftByteString bs = [| B.pack $(stringE $ B.unpack bs) |]
 
+type Url = B.ByteString
 
-type Backend = Method -> String -> RequestHeaders -> IO (HC.Response BL.ByteString)
+type Backend = Method -> Url -> RequestHeaders -> IO (HC.Response BL.ByteString)
 
 
 httpClientBackend :: String -> Manager -> Backend
 httpClientBackend rootUrl manager method pathPieces rawReqHds = do
-  req0 <- parseUrlThrow $ B.unpack method ++ " " ++ rootUrl ++ pathPieces
+  req0 <- parseUrlThrow . BS.toString $ method <> B.pack " " <> BS.fromString rootUrl <> pathPieces
   -- TODO: Avoid to overwrite the request headers?
   let req = req0 { HC.requestHeaders = rawReqHds }
   httpLbs (setRequestIgnoreStatus req) manager
