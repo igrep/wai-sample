@@ -6,12 +6,13 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeApplications           #-}
 
 module WaiSample.Sample where
 
-import           Control.Monad.Identity     (Identity)
 import           Data.Aeson                 (FromJSON, ToJSON, toEncoding)
 import qualified Data.Aeson                 as Json
 import           Data.Aeson.DeriveNoPrefix  (deriveJsonNoTypeNamePrefix)
@@ -34,7 +35,7 @@ import           WaiSample
 data Customer = Customer
   { customerName       :: T.Text
   , customerId         :: Integer
-  , customerApiVersion :: Maybe (ApiVersion Identity Identity)
+  , customerApiVersion :: Maybe (ApiVersion (WithRequestHeaderCodec "X-API-VERSION") (WithRequestHeaderCodec "X-API-REVISION"))
   } deriving (Eq, Generic, Show, Lift)
 
 instance ToJSON Customer where
@@ -50,38 +51,46 @@ instance FromForm Customer
 data ApiVersion codecV codecR =
     ApiVersion (codecV Integer)
   | ApiRevision (codecR Integer)
-  deriving stock (Eq, Generic, Show, Lift)
+  deriving stock Generic
+
+deriving instance (Eq (codecV Integer), Eq (codecR Integer)) => Eq (ApiVersion codecV codecR)
+deriving instance (Show (codecV Integer), Show (codecR Integer)) => Show (ApiVersion codecV codecR)
+deriving instance (Lift (codecV Integer), Lift (codecR Integer)) => Lift (ApiVersion codecV codecR)
 
 instance (Coercible (codecV Integer) Integer, Coercible (codecR Integer) Integer) => ToHttpApiData (ApiVersion codecV codecR) where
-  toUrlPiece (ApiVersion (WithRequestHeaderCodec i))  = T.pack (show i)
-  toUrlPiece (ApiRevision (WithRequestHeaderCodec i)) = T.pack (show i)
+  toUrlPiece (ApiVersion i)  = T.pack $ show (coerce i :: Integer)
+  toUrlPiece (ApiRevision i) = T.pack $ show (coerce i :: Integer)
 
-instance FromHttpApiData (ApiVersion codecV codecR) where
+instance Coercible Integer (codecV Integer) => FromHttpApiData (ApiVersion codecV codecR) where
   parseUrlPiece =
-    ApiVersion . WithRequestHeaderCodec @"X-API-VERSION" <$> parseUrlPiece
+    ApiVersion . coerce @Integer <$> parseUrlPiece
 
-instance ToJSON (ApiVersion codecV codecR) where
-  toJSON (ApiVersion (WithRequestHeaderCodec i))  = Json.toJSON i
-  toJSON (ApiRevision (WithRequestHeaderCodec i)) = Json.toJSON i
+instance (Coercible (codecV Integer) Integer, Coercible (codecR Integer) Integer) => ToJSON (ApiVersion codecV codecR) where
+  toJSON (ApiVersion i)  = Json.toJSON (coerce i :: Integer)
+  toJSON (ApiRevision i) = Json.toJSON (coerce i :: Integer)
 
-  toEncoding (ApiVersion (WithRequestHeaderCodec i))  = Json.toEncoding i
-  toEncoding (ApiRevision (WithRequestHeaderCodec i)) = Json.toEncoding i
+  toEncoding (ApiVersion i)  = Json.toEncoding (coerce i :: Integer)
+  toEncoding (ApiRevision i) = Json.toEncoding (coerce i :: Integer)
 
-instance FromJSON (ApiVersion codecV codecR) where
+instance Coercible Integer (codecV Integer) => FromJSON (ApiVersion codecV codecR) where
   parseJSON =
-    fmap (ApiVersion . WithRequestHeaderCodec @"X-API-VERSION") . Json.parseJSON
+    fmap (ApiVersion . coerce @Integer) . Json.parseJSON
 
 instance ToRequestHeaders (ApiVersion (WithRequestHeaderCodec "X-API-VERSION") (WithRequestHeaderCodec "X-API-REVISION"))
 instance FromRequestHeaders (ApiVersion (WithRequestHeaderCodec "X-API-VERSION") (WithRequestHeaderCodec "X-API-REVISION"))
 instance ShowRequestHeadersType (ApiVersion (WithRequestHeaderCodec "X-API-VERSION") (WithRequestHeaderCodec "X-API-REVISION"))
+
+instance ToQueryParams (ApiVersion (WithQueryParamCodec "apiVersion") (WithQueryParamCodec "apiRevision"))
+instance FromQueryParams (ApiVersion (WithQueryParamCodec "apiVersion") (WithQueryParamCodec "apiRevision"))
+instance ShowQueryParamsType (ApiVersion (WithQueryParamCodec "apiVersion") (WithQueryParamCodec "apiRevision"))
 
 
 apiVersion :: (Coercible Integer (codecV Integer), Coercible Integer (codecR Integer)) => Integer -> ApiVersion codecV codecR
 apiVersion = ApiVersion . coerce
 
 unApiVersion :: (Coercible (codecV Integer) Integer, Coercible (codecR Integer) Integer) => ApiVersion codecV codecR -> Integer
-unApiVersion (ApiVersion (WithRequestHeaderCodec i))  = i
-unApiVersion (ApiRevision (WithRequestHeaderCodec i)) = i
+unApiVersion (ApiVersion i)  = coerce i
+unApiVersion (ApiRevision i) = coerce i
 
 
 data ExampleRequestHeaders = ExampleRequestHeaders
@@ -94,6 +103,18 @@ $(deriveJsonNoTypeNamePrefix ''ExampleRequestHeaders)
 instance ToRequestHeaders ExampleRequestHeaders
 instance FromRequestHeaders ExampleRequestHeaders
 instance ShowRequestHeadersType ExampleRequestHeaders
+
+
+data ExampleQueryParams = ExampleQueryParams
+  { exampleQueryParamsApiVersion :: ApiVersion (WithQueryParamCodec "apiVersion") (WithQueryParamCodec "apiRevision")
+  , exampleQueryParamsApiKey     :: WithQueryParamCodec "apiKey" T.Text
+  } deriving stock (Eq, Show, Generic, Lift)
+
+$(deriveJsonNoTypeNamePrefix ''ExampleQueryParams)
+
+instance ToQueryParams ExampleQueryParams
+instance FromQueryParams ExampleQueryParams
+instance ShowQueryParamsType ExampleQueryParams
 
 sampleRoutes :: [Handler]
 sampleRoutes =
@@ -115,7 +136,7 @@ sampleRoutes =
       -- /customer/:id.json
       (path "customer/" *> decimalPiece <* path ".json")
       options
-      { requestHeadersType = Proxy :: Proxy (Maybe ApiVersion)
+      { requestHeadersType = Proxy :: Proxy (Maybe (ApiVersion (WithRequestHeaderCodec "X-API-VERSION") (WithRequestHeaderCodec "X-API-REVISION")))
       }
       (\i requestInfo -> do
         let apiVer = requestHeadersValue requestInfo
@@ -183,12 +204,12 @@ sampleRoutes =
               $ "Customer " <> T.pack (show i)
               )
 
-  , postWith @(Json, ApiVersion)
+  , postWith @(Json, ApiVersion (WithRequestHeaderCodec "X-API-VERSION") (WithRequestHeaderCodec "X-API-REVISION"))
       "echoApiVersion"
       -- /echoApiVersion
       (path "echoApiVersion/")
       options
-      { requestHeadersType = Proxy :: Proxy ApiVersion
+      { requestHeadersType = Proxy :: Proxy (ApiVersion (WithRequestHeaderCodec "X-API-VERSION") (WithRequestHeaderCodec "X-API-REVISION"))
       }
       (\_ requestInfo -> return $ requestHeadersValue requestInfo)
 
@@ -201,19 +222,19 @@ sampleRoutes =
       }
       (\_ requestInfo -> return $ requestHeadersValue requestInfo)
 
-  , postWith @(Json, ApiVersion)
+  , postWith @(Json, ApiVersion (WithQueryParamCodec "apiVersion") (WithQueryParamCodec "apiRevision"))
       "echoApiVersionQ"
       (path "echoApiVersionQ/")
       options
-      { queryParamsType = Proxy :: Proxy ApiVersion
+      { queryParamsType = Proxy :: Proxy (ApiVersion (WithQueryParamCodec "apiVersion") (WithQueryParamCodec "apiRevision"))
       }
       (\_ requestInfo -> return $ queryParamsValue requestInfo)
 
-  , getWith @(Json, ExampleRequestHeaders)
+  , getWith @(Json, ExampleQueryParams)
       "getExampleQueryParams"
       (path "exampleQueryParams/")
       options
-      { queryParamsType = Proxy :: Proxy ExampleRequestHeaders
+      { queryParamsType = Proxy :: Proxy ExampleQueryParams
       }
       (\_ requestInfo -> return $ queryParamsValue requestInfo)
   ]
