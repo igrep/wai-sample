@@ -57,6 +57,7 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
         (_opts :: EndpointOptions q h)
         (_responder :: Responder a q h resObj)
     ) = do
+
     let qrArg = mkName "reqQrs"
         hasQrArg = not (isVoid @q)
         qr =
@@ -74,10 +75,14 @@ declareClient prefix = fmap concat . mapM declareEndpointFunction
     let funName = mkName $ makeUpName hdrName
         typeQResSpec = liftTypeQ @resSpec
         typeQRtn = [t| IO |] `appT` liftTypeQ @resObj
+        typeQTail0 =
+          if hasQrArg
+            then liftTypeQ @q `funcT` typeQRtn
+            else typeQRtn
         typeQTail =
           if hasReqHdArg
-            then liftTypeQ @h `funcT` typeQRtn
-            else typeQRtn
+            then liftTypeQ @h `funcT` typeQTail0
+            else typeQTail0
     sig <- sigD funName $  [t| Backend |] `funcT` typeQFromRoutingTable typeQTail tbl
 
     let bd = mkName "bd"
