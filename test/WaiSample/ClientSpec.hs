@@ -23,7 +23,9 @@ import           WaiSample                (ContentTypes, Json, PlainText,
 import           WaiSample.Client         (httpClientBackend)
 import           WaiSample.Client.Sample
 import           WaiSample.Sample         (ApiVersion (..), Customer (..),
+                                           ExampleQueryParams (..),
                                            ExampleRequestHeaders (..),
+                                           QueryParamsApiVersion (..),
                                            SampleError (SampleError))
 import           WaiSample.Server.Sample  (sampleApp)
 
@@ -156,6 +158,19 @@ spec =
               , exampleRequestHeadersApiKey     = "api-key"
               }
         sampleGetExampleRequestHeaders backend exampleRequestHeaders `shouldReturn` exampleRequestHeaders
+
+      itWithOuter "echoApiVersionQ returns the API version" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            apiVer = QueryParamsApiVersion 1111
+        sampleEchoApiVersionQ backend apiVer `shouldReturn` apiVer
+
+      itWithOuter "getExampleQueryParams returns the value of ExampleQueryParams" $ \(manager, port) -> do
+        let backend = buildBackend port manager
+            exampleQueryParams = ExampleQueryParams
+              { exampleQueryParamsApiVersion = QueryParamsApiVersion 2222
+              , exampleQueryParamsApiKey     = "api-key-q"
+              }
+        sampleGetExampleQueryParams backend exampleQueryParams `shouldReturn` exampleQueryParams
 
 
 withServer :: (Port -> IO ()) -> IO ()
