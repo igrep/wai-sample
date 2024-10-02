@@ -49,10 +49,10 @@ runHandler (Handler (_ :: Proxy resSpec) _name method tbl (_opts :: EndpointOpti
   act <$> runRoutingTable tbl req
  where
   act x = fmap (either respondWithHttpError id) . runExceptT $ do
-    failWith (HttpError HTS.status405 "Method not allowed.")
+    failWith (HttpError HTS.status405 "405 Method not allowed.")
       . guard $ method == requestMethod req
 
-    mime <- failWith (HttpError HTS.status406 "Not Acceptable") $
+    mime <- failWith (HttpError HTS.status406 "406 Not Acceptable.") $
       matchAccept (contentTypes @(ResponseType resSpec)) acceptHeader
 
     q <- handleFromQueryParamsResult . fromQueryParams . map (second (fromMaybe "")) $ queryString req
@@ -100,10 +100,10 @@ handleFromQueryParamsResult = ExceptT . return . first f . unFromQueryParamsResu
  where
   f (NoQueryItemError (name :| others)) =
     if null others
-      then HttpError HTS.status422 $ "Missing query parameter \"" <> fromStrict name <> "\""
-      else HttpError HTS.status422 $ "Missing query parameter (one of " <> BSL.pack (show (name : others)) <> ")"
+      then HttpError HTS.status422 $ "422 Unprocessable Entity: Missing query parameter \"" <> fromStrict name <> "\""
+      else HttpError HTS.status422 $ "422 Unprocessable Entity: Missing query parameter (one of " <> BSL.pack (show (name : others)) <> ")"
   f (UnprocessableQueryValueError name) =
-    HttpError HTS.status422 $ "Value of the query parameter \"" <> fromStrict name <> "\" is invalid."
+    HttpError HTS.status422 $ "422 Unprocessable Entity: Value of the query parameter \"" <> fromStrict name <> "\" is invalid."
 
 
 handleFromRequestHeadersResult :: FromRequestHeadersResult q -> ExceptT HttpError IO q
@@ -111,7 +111,7 @@ handleFromRequestHeadersResult = ExceptT . return . first f . unFromRequestHeade
  where
   f (NoHeaderError (name :| others)) =
     if null others
-      then HttpError HTS.status422 $ "Missing request header \"" <> fromStrict (original name) <> "\""
-      else HttpError HTS.status422 $ "Missing request header (one of " <> BSL.pack (show (name : others)) <> ")"
+      then HttpError HTS.status422 $ "422 Unprocessable Entity: Missing request header \"" <> fromStrict (original name) <> "\""
+      else HttpError HTS.status422 $ "422 Unprocessable Entity: Missing request header (one of " <> BSL.pack (show (name : others)) <> ")"
   f (UnprocessableHeaderValueError name) =
-    HttpError HTS.status422 $ "Request header \"" <> fromStrict (original name) <> "\" is invalid."
+    HttpError HTS.status422 $ "422 Unprocessable Entity: request header \"" <> fromStrict (original name) <> "\" is invalid."
