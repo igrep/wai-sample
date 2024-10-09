@@ -427,7 +427,7 @@ spec =
                   `addHeader` ("Accept", "*/*")
       res <- request req
       assertStatus 422 res
-      let expectedBody = "422 Unprocessable Entity: Missing query parameters (one of [\"apiVersion\",\"apiRevision\"])"
+      let expectedBody = "422 Unprocessable Entity: Missing query parameter (one of [\"apiVersion\",\"apiRevision\"])"
       assertBody expectedBody res
 
     it "GET /exampleQueryParams returns the value of apiVersion and apiKey query parameters" . runStateTClientState $ do
@@ -437,7 +437,7 @@ spec =
           expectedVersionI = 3333
           expectedKey = "key1"
           expectedBody = ExampleQueryParams
-            { exampleQueryParamsApiVersion = QueryParamsApiVersion expectedVersionI
+            { exampleQueryParamsApiVersion = QueryParamsApiVersion $ WithQueryParamCodec expectedVersionI
             , exampleQueryParamsApiKey = WithQueryParamCodec $ TE.decodeUtf8 expectedKey
             }
 
@@ -448,14 +448,14 @@ spec =
       assertHeaders expectedHeaders res
       liftIO $ A.decode (simpleBody res) `shouldBe` Just expectedBody
 
-    it "GET /exampleQueryParams returns the value of X-API-REVISION and X-API-KEY request headers" . runStateTClientState $ do
+    it "GET /exampleQueryParams returns the value of apiRevision and apiKey query parameters" . runStateTClientState $ do
       let req = defaultRequest
                   `setPath` ("/exampleQueryParams/?apiRevision=" <> BS.pack (show expectedVersionI) <> "&apiKey=" <> expectedKey)
                   `addHeader` ("Accept", "*/*")
-          expectedVersionI = 4444
-          expectedKey = "key2"
+          expectedVersionI = 4445
+          expectedKey = "key222"
           expectedBody = ExampleQueryParams
-            { exampleQueryParamsApiVersion = QueryParamsApiVersion expectedVersionI
+            { exampleQueryParamsApiVersion = QueryParamsApiVersion $ WithQueryParamCodec expectedVersionI
             , exampleQueryParamsApiKey = WithQueryParamCodec $ TE.decodeUtf8 expectedKey
             }
 
@@ -466,24 +466,22 @@ spec =
       assertHeaders expectedHeaders res
       liftIO $ A.decode (simpleBody res) `shouldBe` Just expectedBody
 
-    it "GET /exampleQueryParams returns an 422 error not given either X-API-VERSION or X-API-REVISION request header" . runStateTClientState $ do
+    it "GET /exampleQueryParams returns an 422 error not given either apiVersion or apiRevision query parameter" . runStateTClientState $ do
       let req = defaultRequest
-                  `setPath` "/exampleQueryParams/"
+                  `setPath` "/exampleQueryParams/?apiKey=key"
                   `addHeader` ("Accept", "*/*")
-                  `addHeader` ("X-API-KEY", "key 3")
       res <- request req
       assertStatus 422 res
-      let expectedBody = "422 Unprocessable Entity: Missing request header (one of [\"X-API-VERSION\",\"X-API-REVISION\"])"
+      let expectedBody = "422 Unprocessable Entity: Missing query parameter (one of [\"apiVersion\",\"apiRevision\"])"
       assertBody expectedBody res
 
-    it "GET /exampleQueryParams returns an 422 error not given X-API-KEY request header" . runStateTClientState $ do
+    it "GET /exampleQueryParams returns an 422 error not given apiKey query parameter" . runStateTClientState $ do
       let req = defaultRequest
-                  `setPath` "/exampleQueryParams/"
+                  `setPath` "/exampleQueryParams/?apiVersion=9999"
                   `addHeader` ("Accept", "*/*")
-                  `addHeader` ("X-API-VERSION", "9999")
       res <- request req
       assertStatus 422 res
-      let expectedBody = "422 Unprocessable Entity: Missing request header \"X-API-KEY\""
+      let expectedBody = "422 Unprocessable Entity: Missing query parameter \"apiKey\""
       assertBody expectedBody res
 
 assertHeaders :: HasCallStack => ResponseHeaders -> SResponse -> Session ()
