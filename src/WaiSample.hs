@@ -48,6 +48,7 @@ showHandlerSpec :: Handler -> T.Text
 showHandlerSpec (Handler resSpec name method tbl (_opts :: EndpointOptions q h) _hdl) =
   T.pack name <> " " <> T.pack (show method) <> " " <> showRoute tbl <> "\n"
     <> "  Request:\n"
+    <> "    Query Params: " <> showQueryParamsType @q <> "\n"
     <> "    Headers: " <> showRequestHeadersType @h <> "\n"
 
     -- TODO: More HTTP response specific information

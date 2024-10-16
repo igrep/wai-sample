@@ -23,7 +23,7 @@ spec = describe "showHandlerSpec" $ do
                    \  Response: (Json,ExampleRequestHeaders)\n"
     showHandlerSpec getExampleRequestHeaders `shouldBe` expected
 
-  it "returns getExampleQueryParams path, query parameters, response headers, and request headers information" $ do
+  it "returns getExampleQueryParams' path, query parameters, response headers, and request headers information" $ do
     let getExampleRequestHeaders =
           findJust (\hdr -> handlerName hdr == "getExampleQueryParams") sampleRoutes
         expected = "getExampleQueryParams \"GET\" /exampleQueryParams/\n\

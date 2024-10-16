@@ -80,12 +80,15 @@ data Handler where
       , Typeable (ResponseObject resSpec)
       , HasStatusCode (ResponseType resSpec)
       , HasContentTypes (ResponseType resSpec)
+
       , Typeable q
+      , ToQueryParams q
+      , FromQueryParams q
+      , ShowQueryParamsType q
+
       , Typeable h
       , ToRequestHeaders h
       , FromRequestHeaders h
-      , ToQueryParams q
-      , FromQueryParams q
       , ShowRequestHeadersType h
       )
     =>

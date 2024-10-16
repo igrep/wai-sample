@@ -63,7 +63,7 @@ instance
     WithQueryParamCodec <$> decodeQuery (BS.fromString $ symbolVal (Proxy @n)) rhds
 
 instance (KnownSymbol n, Typeable v) => ShowQueryParamsType (WithQueryParamCodec n v) where
-  showQueryParamsType = T.pack (symbolVal (Proxy @n)) <> "=" <> T.pack (show $ typeRep (Proxy @v))
+  showQueryParamsType = T.pack (symbolVal (Proxy @n)) <> ": " <> T.pack (show $ typeRep (Proxy @v))
 
 
 class GToQueryParams f where
